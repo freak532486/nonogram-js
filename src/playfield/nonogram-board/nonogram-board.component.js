@@ -119,6 +119,7 @@ export class NonogramBoardComponent {
         this.#cellBlackTemplate.style.height = (CELL_SIZE_PX - 2) + "px";
 
         this.#cellWhiteTemplate = document.createElement("span");
+        this.#cellWhiteTemplate.style.fontFamily = "sans-serif";
         this.#cellWhiteTemplate.textContent = "X";
 
         /* Create row hint divs */
@@ -246,8 +247,6 @@ export class NonogramBoardComponent {
                 div.style.justifyItems = "center";
                 div.style.alignItems = "center";
                 div.style.alignContent = "center";
-
-                div.style.fontFamily = "sans-serif";
                 div.style.userSelect = "none";
 
                 div.style.cursor = "pointer";
@@ -540,9 +539,11 @@ export class NonogramBoardComponent {
             div.style.display = "flex";
             div.style.alignItems = "center";
             div.style.justifyContent = "center";
-            div.style.opacity = "0.5";
+            div.style.backgroundColor = "var(--bg1)";
 
-            div.replaceChildren(template.cloneNode(true));
+            const child = /** @type {HTMLElement} */ (template.cloneNode(true));
+            child.style.opacity = "0.5";
+            div.replaceChildren(child);
             this.view.appendChild(div);
         }
     }
