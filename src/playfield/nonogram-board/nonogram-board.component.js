@@ -316,6 +316,17 @@ export class NonogramBoardComponent {
         this.#view = view;
 
         /* Initial selection value */
+    }
+
+    /**
+     * Initializes and attaches this component
+     * 
+     * @param {HTMLElement} parent 
+     */
+    init(parent) {
+        parent.append(this.view);
+
+        /* Move selection to top-left corner */
         this.selection = new Point(0, 0);
     }
 
@@ -367,8 +378,14 @@ export class NonogramBoardComponent {
         }
 
         const cellDiv = this.getCellDiv(p.x, p.y);
-        this.#selectionDiv.style.left = cellDiv.offsetLeft + "px";
-        this.#selectionDiv.style.top = cellDiv.offsetTop + "px";
+
+        const style = getComputedStyle(cellDiv);
+        const borderLeft = parseFloat(style.borderLeftWidth) || 0;
+        const borderTop = parseFloat(style.borderTopWidth) || 0;
+
+        this.#selectionDiv.style.left = (cellDiv.offsetLeft + borderLeft) + "px";
+        this.#selectionDiv.style.top = (cellDiv.offsetTop + borderTop) + "px";
+        
 
         /* Highlight hints */
         this.#rowHintDivs[oldY].style.backgroundColor = "white";
