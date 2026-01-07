@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "esbuild --bundle src/main.js --outfile=dist/bundle.js  --platform=browser  --format=esm  --sourcemap  --loader:.html=file  --loader:.css=css  --external:/images/*  --external:/nonograms/joined.json --watch",
+    "build": "esbuild --bundle src/main.js --outfile=dist/bundle.js  --platform=browser  --format=esm  --sourcemap  --loader:.html=file  --loader:.css=css  --external:/images/*  --external:/nonograms/joined.json"
   },
   "repository": {
     "type": "git",
