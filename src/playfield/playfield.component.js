@@ -1,5 +1,5 @@
 import * as storage from "../storage.js"
-import { CellKnowledge, DeductionStatus, NonogramState } from "../common/nonogram-types.js";
+import { CellKnowledge, DeductionStatus, LineId, NonogramState, SingleDeductionResult } from "../common/nonogram-types.js";
 import { Point } from "../common/point.js";
 import { loadHtml } from "../loader.js";
 import { Menu } from "../menu/menu.component.js";
@@ -64,7 +64,7 @@ export class PlayfieldComponent {
             if (deduction.status == DeductionStatus.DEDUCTION_MADE) {
                 this.#messageBox.showMessage("You can make a deduction in " + deduction.lineId + ".");
             } else {
-                this.#messageBox.showMessage(getTextForStatus(deduction.status));
+                this.#messageBox.showMessage(getTextForDeduction(deduction));
             }
         };
         menu.appendElement(hintButton);
@@ -79,7 +79,7 @@ export class PlayfieldComponent {
             const state = this.#extractSolverState();
             const deduction = deduceNext(state);
 
-            this.#messageBox.showMessage(getTextForStatus(deduction.status));
+            this.#messageBox.showMessage(getTextForDeduction(deduction));
             if (deduction.status !== DeductionStatus.DEDUCTION_MADE) {
                 return;
             }
@@ -411,13 +411,13 @@ export class PlayfieldComponent {
 /**
  * Returns an appropriate status text for the given deduction status.
  * 
- * @param {DeductionStatus} status
+ * @param {SingleDeductionResult} deduction
  * @returns {String}
  */
-function getTextForStatus(status) {
-    switch (status) {
+function getTextForDeduction(deduction) {
+    switch (deduction.status) {
         case DeductionStatus.COULD_NOT_DEDUCE: return "Solver could not make a deduction.";
-        case DeductionStatus.DEDUCTION_MADE: return "A deduction was made.";
+        case DeductionStatus.DEDUCTION_MADE: return "A deduction was made in " + deduction.lineId + ".";
         case DeductionStatus.WAS_IMPOSSIBLE: return "Puzzle is impossible.";
         case DeductionStatus.WAS_SOLVED: return "Puzzle is solved.";
         case DeductionStatus.TIMEOUT: return "Solver timeout.";

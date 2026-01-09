@@ -1,10 +1,13 @@
 #message-box {
     position: absolute;
     inset: 20px;
+    left: auto;
+    width: fit-content;
 
     display: flex;
     flex-direction: column;
     justify-content: end;
+    align-items: center;
     gap: 5px;
 
     pointer-events: none;
@@ -16,6 +19,8 @@
     position: relative;
     background-color: var(--bg1);
     padding: 10px;
+
+    width: fit-content;
 
     border: 1px solid var(--border-color);
     border-radius: 5px;

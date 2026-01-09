@@ -178,7 +178,7 @@ function deduceLine(state, lineId) {
         state.rowHints[lineId.index] : 
         state.colHints[lineId.index];
     
-    return lineDeduction(curKnowledge, hints);
+    return overlapLineDeduction(curKnowledge, hints);
 }
 
 class LineDeductionResult {
@@ -200,6 +200,179 @@ class LineDeductionResult {
 }
 
 /**
+ * 
+ * 
+ * @param {LineKnowledge} lineKnowledge 
+ * @param {Array<number>} hints
+ * @returns {LineDeductionResult}
+ */
+function overlapLineDeduction(lineKnowledge, hints) {
+    /* Create new line knowledge */
+    const lineLength = lineKnowledge.cells.length;
+    const newKnowledge = new LineKnowledge(Array(lineLength).fill(CellKnowledge.DEFINITELY_WHITE));
+
+    /* Check each hint */
+    for (let k = 0; k < hints.length; k++) {
+        const hint = hints[k];
+        let minLeft = hints.slice(0, k).reduce((a, b) => a + b, 0) + k;
+        let maxRight = lineLength - hints.slice(k + 1).reduce((a, b) => a + b, 0) - (hints.length - k - 1);
+
+        /* Move hint between its minimum and maximum position */
+        const maxLeft = maxRight - hint;
+        let maxValidLeft = -Number.MAX_VALUE;
+        let minValidRight = Number.MAX_VALUE;
+        for (let x = minLeft; x <= maxLeft; x++) {
+            /* Check hint validity */
+            let valid = true;
+
+            /* Create new simulated cell knowledge */
+            const simulatedKnowledge = new LineKnowledge([...lineKnowledge.cells]);
+            
+            const whiteLeft = k == 0 ? 0 : Math.max(0, x - 1);
+            for (let j = x - 1; j >= whiteLeft; j--) {
+                if (simulatedKnowledge.cells[j] == CellKnowledge.DEFINITELY_BLACK) {
+                    valid = false;
+                }
+
+                simulatedKnowledge.cells[j] = CellKnowledge.DEFINITELY_WHITE;
+            }
+
+            /* Place black squares */
+            for (let j = x; j < x + hint; j++) {
+                if (simulatedKnowledge.cells[j] == CellKnowledge.DEFINITELY_WHITE) {
+                    valid = false;
+                }
+
+                simulatedKnowledge.cells[j] = CellKnowledge.DEFINITELY_BLACK;
+            }
+
+            /* Place white square right of hint */
+            if (x + hint < lineLength) {
+                if (simulatedKnowledge.cells[x + hint] == CellKnowledge.DEFINITELY_BLACK) {
+                    valid = false;
+                }
+
+                simulatedKnowledge.cells[x + hint] = CellKnowledge.DEFINITELY_WHITE;
+            }
+
+            /* Final validation by trying to place hints */
+            if (valid) {
+                valid = valid && canHintsBePlaced(simulatedKnowledge, hints);
+            }
+
+            /* Skip this position if invalid */
+            if (!valid) {
+                continue;
+            }
+
+            /* This position is valid */
+            maxValidLeft = Math.max(maxValidLeft, x);
+            minValidRight = Math.min(minValidRight, x + hint);
+        }
+
+        /* If no valid position, then there is a contradiction */
+        if (maxValidLeft == Number.MIN_VALUE) {
+            return new LineDeductionResult(DeductionStatus.WAS_IMPOSSIBLE, null);
+        }
+
+        /* Cells inside the overlap are definitely black. Cells inside valid area, but outside of overlap are unknown */
+        for (let i = minValidRight - hint; i < maxValidLeft + hint; i++) {
+            const insideOverlap = i >= maxValidLeft && i < minValidRight;
+            newKnowledge.cells[i] = insideOverlap ? CellKnowledge.DEFINITELY_BLACK : lineKnowledge.cells[i];
+        }
+    }
+
+    /* Check if anything changed */
+    let anythingChanged = false;
+    let anythingUnknown = false;
+
+    for (let i = 0; i < lineLength; i++) {
+        anythingUnknown = anythingUnknown || newKnowledge.cells[i] == CellKnowledge.UNKNOWN;
+        anythingChanged = anythingChanged || newKnowledge.cells[i] != lineKnowledge.cells[i];
+    }
+
+    /* Return result */
+    if (!anythingChanged && !anythingUnknown) {
+        return new LineDeductionResult(DeductionStatus.WAS_SOLVED, newKnowledge);
+    } else if (!anythingChanged) {
+        return new LineDeductionResult(DeductionStatus.COULD_NOT_DEDUCE, newKnowledge);
+    } else {
+        return new LineDeductionResult(DeductionStatus.DEDUCTION_MADE, newKnowledge);
+    }
+}
+
+/**
+ * Checks if the given hints can still be placed onto the given line.
+ * 
+ * @param {LineKnowledge} lineKnowledge 
+ * @param {Array<number>} hints
+ * @returns {boolean} 
+ */
+function canHintsBePlaced(lineKnowledge, hints) {
+    /* No hints => No black squares must exist */
+    if (hints.length == 0) {
+        return !lineKnowledge.cells.some(cell => cell == CellKnowledge.DEFINITELY_BLACK);
+    }
+
+    /* Place first hint, then recurse */
+    const lineLength = lineKnowledge.cells.length;
+    const hintSum = hints.reduce((a, b) => a + b, 0);
+
+    if (hintSum + hints.length - 1 > lineLength) {
+        return false;
+    }
+
+    const maxPos = lineLength - hintSum - hints.length + 1;
+
+    for (let i = 0; i <= maxPos; i++) {
+        const endIdx = i + hints[0];
+
+        /* Check if placement is valid */
+        let placementValid = true;
+
+        /* Everything left from the hint must be white */
+        for (let j = 0; j < i; j++) {
+            if (lineKnowledge.cells[j] == CellKnowledge.DEFINITELY_BLACK) {
+                placementValid = false;
+                break;
+            }
+        }
+
+        /* Inside hint everything must be black-able */
+        for (let j = i; j < endIdx; j++) {
+            if (j >= lineLength) {
+                placementValid = false;
+                break;
+            }
+
+            if (lineKnowledge.cells[j] == CellKnowledge.DEFINITELY_WHITE) {
+                placementValid = false;
+                break;
+            }
+        }
+
+        /* One next to the hint must be white */
+        if (endIdx < lineLength && lineKnowledge.cells[endIdx] == CellKnowledge.DEFINITELY_BLACK) {
+            placementValid = false;
+        }
+
+        /* Skip invalid placements */
+        if (!placementValid) {
+            continue;
+        }
+
+        /* Recurse */
+        const remainingKnowledge = new LineKnowledge(lineKnowledge.cells.slice(endIdx + 1));
+        const remainingHints = hints.slice(1);
+        if (canHintsBePlaced(remainingKnowledge, remainingHints)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * This function checks all possible configurations of the line. It skips configurations that are impossible w.r.t.
  * the given line knowledge.
  * Squares that are always black in all remaining configurations are deduced as black, vice versa for white. The
@@ -209,7 +382,7 @@ class LineDeductionResult {
  * @param {Array<number>} hints
  * @returns {LineDeductionResult}
  */
-function lineDeduction(lineKnowledge, hints) {
+function bruteForceLineDeduction(lineKnowledge, hints) {
     const lineLength = lineKnowledge.cells.length;
 
     /*
