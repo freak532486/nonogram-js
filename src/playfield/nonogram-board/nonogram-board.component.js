@@ -141,8 +141,9 @@ export class NonogramBoardComponent {
 
             div.style.transformOrigin = "center right";
 
-            /* Add hints to container */
-            for (const hint of rowHints[row]) {
+            /* Add hints to container. Empty hints should be displayed as a single zero. */
+            const hintsWithZero = rowHints[row].length == 0 ? [0] : rowHints[row];
+            for (const hint of hintsWithZero) {
                 const hintDiv = document.createElement("div");
 
                 hintDiv.style.fontFamily = "Verdana";
@@ -192,7 +193,8 @@ export class NonogramBoardComponent {
             div.style.borderRight = (col % 5 == 4) ? "2px solid black" : "1px solid black";
             div.style.borderTop = "2px solid black";
 
-            /* Add hints to container */
+            /* Add hints to container. Empty hints should be displayed as a single zero. */
+            const hintsWithZero = colHints[col].length == 0 ? [0] : colHints[col];
             for (const hint of colHints[col]) {
                 const hintDiv = document.createElement("div");
 
