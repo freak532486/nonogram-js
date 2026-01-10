@@ -3,7 +3,7 @@ import { CellKnowledge, DeductionStatus, LineId, NonogramState, SingleDeductionR
 import { Point } from "../common/point.js";
 import { loadHtml } from "../loader.js";
 import { Menu } from "../menu/menu.component.js";
-import { deduceNext } from "../solver.js";
+import { deduceAll, deduceNext } from "../solver.js";
 import { ControlPad, ControlPadButton } from "./control-pad/control-pad.component.js";
 import { MessageBox } from "./message-box/message-box.component.js";
 import { BoardComponentFullState, NonogramBoardComponent } from "./nonogram-board/nonogram-board.component.js";
@@ -64,7 +64,7 @@ export class PlayfieldComponent {
             if (deduction.status == DeductionStatus.DEDUCTION_MADE) {
                 this.#messageBox.showMessage("You can make a deduction in " + deduction.lineId + ".");
             } else {
-                this.#messageBox.showMessage(getTextForDeduction(deduction));
+                this.#messageBox.showMessage(getTextForStatus(deduction.status));
             }
         };
         menu.appendElement(hintButton);
@@ -79,8 +79,10 @@ export class PlayfieldComponent {
             const state = this.#extractSolverState();
             const deduction = deduceNext(state);
 
-            this.#messageBox.showMessage(getTextForDeduction(deduction));
-            if (deduction.status !== DeductionStatus.DEDUCTION_MADE) {
+            if (deduction.status == DeductionStatus.DEDUCTION_MADE) {
+                this.#messageBox.showMessage("Deduction made in " + deduction.lineId + ".");
+            } else {
+                this.#messageBox.showMessage(getTextForStatus(deduction.status));
                 return;
             }
 
@@ -90,9 +92,28 @@ export class PlayfieldComponent {
         };
         menu.appendElement(nextButton);
 
+        /* Add full solve button */
+        const solveButton = document.createElement("button");
+        solveButton.classList.add("entry", "playfield", "border-top", "border-right" );
+        solveButton.textContent = "Solve";
+        solveButton.onclick = () => {
+            menu.toggle();
+            
+            const state = this.#extractSolverState();
+            const deduction = deduceAll(state);
+
+            this.#messageBox.showMessage(getTextForStatus(deduction.status));
+            this.#nonogramBoard.applyState(new BoardComponentFullState(deduction.newState.getCellStates()));
+            this.#updateHistory();
+            if (deduction.status !== DeductionStatus.WAS_SOLVED) {
+                return;
+            }
+        };
+        menu.appendElement(solveButton);
+
         /* Add reset button */
         const resetButton = document.createElement("button");
-        resetButton.classList.add("entry", "playfield", "border-right", "border-top");
+        resetButton.classList.add("entry", "playfield", "border-top");
         resetButton.textContent = "Reset";
         resetButton.onclick = () => {
             menu.toggle();
@@ -105,6 +126,7 @@ export class PlayfieldComponent {
             this.#nonogramBoard.applyState(emptyState);
             storage.storeState(nonogramId, emptyState);
             this.#stateHistory = [emptyState];
+            this.#activeStateIdx = 0;
             this.controlPad.getButton(ControlPadButton.UNDO).style.visibility = "hidden";
             this.controlPad.getButton(ControlPadButton.REDO).style.visibility = "hidden";
         }
@@ -112,8 +134,9 @@ export class PlayfieldComponent {
 
         /* Add exit button */
         const exitButton = document.createElement("button");
-        exitButton.classList.add("entry", "playfield", "border-top");
+        exitButton.classList.add("entry", "playfield", "border-top", "border-right");
         exitButton.textContent = "Exit";
+        exitButton.style.gridColumn = "1 / 3";
         exitButton.style.color = "#ff3b3bff";
         exitButton.onclick = () => {
             menu.toggle();
@@ -411,13 +434,13 @@ export class PlayfieldComponent {
 /**
  * Returns an appropriate status text for the given deduction status.
  * 
- * @param {SingleDeductionResult} deduction
+ * @param {DeductionStatus} status
  * @returns {String}
  */
-function getTextForDeduction(deduction) {
-    switch (deduction.status) {
+function getTextForStatus(status) {
+    switch (status) {
         case DeductionStatus.COULD_NOT_DEDUCE: return "Solver could not make a deduction.";
-        case DeductionStatus.DEDUCTION_MADE: return "A deduction was made in " + deduction.lineId + ".";
+        case DeductionStatus.DEDUCTION_MADE: return "A deduction was made.";
         case DeductionStatus.WAS_IMPOSSIBLE: return "Puzzle is impossible.";
         case DeductionStatus.WAS_SOLVED: return "Puzzle is solved.";
         case DeductionStatus.TIMEOUT: return "Solver timeout.";

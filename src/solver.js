@@ -1,5 +1,4 @@
 import { CellKnowledge, DeductionStatus, FullDeductionResult, LineId, LineKnowledge, LineType, NonogramState, SingleDeductionResult } from "./common/nonogram-types.js"
-import { arraysEqual } from "./util.js";
 
 const TIMEOUT_SECS = 5;
 
@@ -13,9 +12,10 @@ export function deduceAll(state) {
     /* Create new state */
     const startTs = Date.now();
     const newState = NonogramState.clone(state);
+    const keyFunc = getLineKeyFunction(state);
 
     /* Create list of all lines */
-    let lines = [];
+    let lines = new PriorityQueue(keyFunc);
 
     for (let row = 0; row < state.height; row++) {
         lines.push(new LineId(LineType.ROW, row));
@@ -26,54 +26,58 @@ export function deduceAll(state) {
     }
 
     /* Deduce until no line is left */
-    while (lines.length > 0) {
+    while (lines.size() > 0) {
         if (Date.now() - startTs > 1000 * TIMEOUT_SECS) {
             return new FullDeductionResult(DeductionStatus.TIMEOUT, newState);
         }
 
-        const deduction = deduceNextInternal(newState, lines);
+        const line = /** @type {LineId} */ (lines.pop());
+        const deduction = deduceLine(newState, line);
 
-        /* Quit if no deduction was made anymore */
-        if (deduction.status != DeductionStatus.DEDUCTION_MADE) {
+        /* Skip on already-solved line or deduction failure */
+        if (deduction.status == DeductionStatus.WAS_SOLVED || deduction.status == DeductionStatus.COULD_NOT_DEDUCE) {
+            continue;
+        }
+
+        /* Quit on timeout or contradiction */
+        if (deduction.status !== DeductionStatus.DEDUCTION_MADE) {
             return new FullDeductionResult(deduction.status, newState);
         }
 
-        /* Remove deduced line from lines */
-        lines = lines.filter(lineId => lineId !== deduction.lineId);
-
         /* Add all changed perpendicular lines to lines to check */
-        if (deduction.lineId.lineType == LineType.ROW) {
-            const y = deduction.lineId.index;
+        if (line.lineType == LineType.ROW) {
+            const y = line.index;
             for (let x = 0; x < state.width; x++) {
                 const col = new LineId(LineType.COLUMN, x);
-                if (deduction.newKnowledge.cells[x] == newState.getCell(x, y)) {
+                if (deduction.newKnowledge?.cells[x] == newState.getCell(x, y)) {
                     continue;
                 }
 
-                if (!lines.find(lineId => lineId.lineType == col.lineType && lineId.index == col.index)) {
+                if (!lines.arr.some(lineId => lineId.lineType == col.lineType && lineId.index == col.index)) {
                     lines.push(col);
                 }
             }
         } else {
-            const x = deduction.lineId.index;
+            const x = line.index;
             for (let y = 0; y < state.height; y++) {
                 const row = new LineId(LineType.ROW, y);
-                if (deduction.newKnowledge.cells[y] == newState.getCell(x, y)) {
+                if (deduction.newKnowledge?.cells[y] == newState.getCell(x, y)) {
                     continue;
                 }
 
-                if (!lines.find(lineId => lineId.lineType == row.lineType && lineId.index == row.index)) {
+                if (!lines.arr.some(lineId => lineId.lineType == row.lineType && lineId.index == row.index)) {
                     lines.push(row);
                 }
             }
         }
 
         /* Apply deduction to state */
-        newState.applyDeduction(deduction);
+        const singleDeduction = new SingleDeductionResult(deduction.status, line, deduction.newKnowledge); 
+        newState.applyDeduction(singleDeduction);
     }
 
     /* Really shouldn't get here ever, but just in case... */
-    return new FullDeductionResult(DeductionStatus.COULD_NOT_DEDUCE, newState);
+    return new FullDeductionResult(DeductionStatus.WAS_SOLVED, newState);
 }
 
 /**
@@ -83,84 +87,54 @@ export function deduceAll(state) {
  */
 export function deduceNext(state) {
     /* Create list of all lines */
-    const allLines = [];
+    const keyFunc = getLineKeyFunction(state);
+    const lines = new PriorityQueue(keyFunc);
 
     for (let row = 0; row < state.height; row++) {
-        allLines.push(new LineId(LineType.ROW, row));
+        const line = new LineId(LineType.ROW, row);
+        lines.push(line);
     }
 
     for (let col = 0; col < state.width; col++) {
-        allLines.push(new LineId(LineType.COLUMN, col));
+        const line = new LineId(LineType.COLUMN, col);
+        lines.push(line);
     }
 
-    /* Perform internal deduction */
-    return deduceNextInternal(state, allLines);
-}
+    let allSolved = true;
+    while (lines.size() > 0) {
+        const line = /** @type {LineId} */ (lines.pop());
+        const deduction = deduceLine(state, line);
+        allSolved = allSolved && deduction.status == DeductionStatus.WAS_SOLVED;
 
-/**
- * @param {NonogramState} state
- * @param {Array<LineId>} lines
- * @returns {SingleDeductionResult}
- */
-export function deduceNextInternal(state, lines) {
-    let allLinesSolved = true;
-
-    /* Order by hint size and number of filled squares */
-    /** @param {LineId} lineId */
-    const lineSortKey = (lineId) => {
-        const line = (lineId.lineType == LineType.ROW) ? state.getRowKnowledge(lineId.index) : 
-            state.getColKnowledge(lineId.index);
-        
-        const hints = (lineId.lineType == LineType.ROW) ? state.rowHints[lineId.index] : 
-            state.colHints[lineId.index];
-
-        const minRequiredLength = hints.reduce((a, b) => a + b, 0) + hints.length - 1;
-        const slack = line.cells.length - minRequiredLength;
-        const numKnown = line.cells.reduce((sum, x) => sum + (x == CellKnowledge.UNKNOWN ? 0 : 1));
-        
-        if (minRequiredLength == 0) {
-            return Number.MAX_VALUE;
-        }
-
-        return numKnown - slack;
-    };
-
-    /**
-     * Comparator for lines.
-     * 
-     * @param {LineId} a 
-     * @param {LineId} b 
-     * @returns number
-     */
-    const lineComp = (a, b) => lineSortKey(b) - lineSortKey(a);
-
-    lines.sort(lineComp);
-
-    /* Deduce lines */
-    for (const lineId of lines) {
-        const newKnowledge = deduceLine(state, lineId);
-
-        if (newKnowledge.status == DeductionStatus.WAS_IMPOSSIBLE) {
-            return SingleDeductionResult.impossible();
-        }
-
-        const solved = newKnowledge.status == DeductionStatus.WAS_SOLVED;
-        const deductionMade = newKnowledge.status == DeductionStatus.DEDUCTION_MADE;
-        allLinesSolved = allLinesSolved && solved;
-
-        if (!deductionMade) {
+        /* Skip solved lines */
+        if (deduction.status == DeductionStatus.WAS_SOLVED || deduction.status == DeductionStatus.COULD_NOT_DEDUCE) {
             continue;
         }
 
-        return new SingleDeductionResult(DeductionStatus.DEDUCTION_MADE, lineId, newKnowledge.newKnowledge);
+        /* Return on timeout, contradiction or deduced line. */
+        return new SingleDeductionResult(deduction.status, line, deduction.newKnowledge);
     }
 
-    /* Nothing was deducible */
-    if (allLinesSolved) {
-        return new SingleDeductionResult(DeductionStatus.WAS_SOLVED, null, null);
-    } else {
-        return new SingleDeductionResult(DeductionStatus.COULD_NOT_DEDUCE, null, null);
-    }
+    return new SingleDeductionResult(allSolved ? DeductionStatus.WAS_SOLVED : DeductionStatus.COULD_NOT_DEDUCE, null, null);
+}
+
+/**
+ * Returns the key function for sorting lines.
+ * 
+ * @param {NonogramState} state 
+ * @returns {(line: LineId) => number}
+ */
+function getLineKeyFunction(state) {
+    /* Order by hint size and number of filled squares */
+    /** @param {LineId} lineId */
+    return (lineId) => {
+        /* Prioritize lines on the edges */
+        if (lineId.lineType == LineType.COLUMN) {
+            return Math.abs(lineId.index - state.colHints.length / 2);
+        } else {
+            return Math.abs(lineId.index - state.rowHints.length / 2);
+        }
+    };
 }
 
 /**
@@ -170,15 +144,18 @@ export function deduceNextInternal(state, lines) {
  * @param {LineId} lineId 
  */
 function deduceLine(state, lineId) {
-    const curKnowledge = (lineId.lineType == LineType.ROW) ? 
-        state.getRowKnowledge(lineId.index) : 
+    const curKnowledge = (lineId.lineType == LineType.ROW) ?
+        state.getRowKnowledge(lineId.index) :
         state.getColKnowledge(lineId.index);
 
-    const hints = (lineId.lineType == LineType.ROW) ? 
-        state.rowHints[lineId.index] : 
+    const hints = (lineId.lineType == LineType.ROW) ?
+        state.rowHints[lineId.index] :
         state.colHints[lineId.index];
-    
-    return overlapLineDeduction(curKnowledge, hints);
+
+    const ts = Date.now();
+    const ret = overlapLineDeduction(curKnowledge, hints);
+    console.log("Line deduction took " + (Date.now() - ts) + "ms");
+    return ret;
 }
 
 class LineDeductionResult {
@@ -193,399 +170,358 @@ class LineDeductionResult {
      * @param {DeductionStatus} status 
      * @param {LineKnowledge | null} newKnowledge 
      */
-    constructor (status, newKnowledge) {
+    constructor(status, newKnowledge) {
         this.status = status;
         this.newKnowledge = newKnowledge;
     }
 }
 
+
 /**
- * 
- * 
- * @param {LineKnowledge} lineKnowledge 
- * @param {Array<number>} hints
- * @returns {LineDeductionResult}
- */
+* 
+* @param {LineKnowledge} lineKnowledge 
+* @param {Array<number>} hints
+* @returns {LineDeductionResult}
+*/
 function overlapLineDeduction(lineKnowledge, hints) {
-    /* Create new line knowledge */
     const lineLength = lineKnowledge.cells.length;
-    const newKnowledge = new LineKnowledge(Array(lineLength).fill(CellKnowledge.DEFINITELY_WHITE));
+    const newKnowledge = new LineKnowledge([...lineKnowledge.cells]);
 
-    /* Check each hint */
-    for (let k = 0; k < hints.length; k++) {
-        const hint = hints[k];
-        let minLeft = hints.slice(0, k).reduce((a, b) => a + b, 0) + k;
-        let maxRight = lineLength - hints.slice(k + 1).reduce((a, b) => a + b, 0) - (hints.length - k - 1);
+    /* Get leftmost and rightmost solution */
+    let ts = Date.now();
+    const lSol = leftmostSolution(lineKnowledge, hints);
+    const rSol = rightmostSolution(lineKnowledge, hints);
+    console.log("Finding solutions took " + (Date.now() - ts) + "ms");
 
-        /* Move hint between its minimum and maximum position */
-        const maxLeft = maxRight - hint;
-        let maxValidLeft = -Number.MAX_VALUE;
-        let minValidRight = Number.MAX_VALUE;
-        for (let x = minLeft; x <= maxLeft; x++) {
-            /* Check hint validity */
-            let valid = true;
+    /* No solution found => Impossible */
+    if (!lSol || !rSol) {
+        return new LineDeductionResult(DeductionStatus.WAS_IMPOSSIBLE, null);
+    }
 
-            /* Create new simulated cell knowledge */
-            const simulatedKnowledge = new LineKnowledge([...lineKnowledge.cells]);
-            
-            const whiteLeft = k == 0 ? 0 : Math.max(0, x - 1);
-            for (let j = x - 1; j >= whiteLeft; j--) {
-                if (simulatedKnowledge.cells[j] == CellKnowledge.DEFINITELY_BLACK) {
-                    valid = false;
-                }
+    /* Check each cell for hint or gap overlap */
+    for (let x = 0; x < lineLength; x++) {
+        /* Calculate which block (hint or gap) overlays x */
+        const lBlock = calcContainedBlock(x, hints, lSol);
+        const rBlock = calcContainedBlock(x, hints, rSol);
 
-                simulatedKnowledge.cells[j] = CellKnowledge.DEFINITELY_WHITE;
-            }
-
-            /* Place black squares */
-            for (let j = x; j < x + hint; j++) {
-                if (simulatedKnowledge.cells[j] == CellKnowledge.DEFINITELY_WHITE) {
-                    valid = false;
-                }
-
-                simulatedKnowledge.cells[j] = CellKnowledge.DEFINITELY_BLACK;
-            }
-
-            /* Place white square right of hint */
-            if (x + hint < lineLength) {
-                if (simulatedKnowledge.cells[x + hint] == CellKnowledge.DEFINITELY_BLACK) {
-                    valid = false;
-                }
-
-                simulatedKnowledge.cells[x + hint] = CellKnowledge.DEFINITELY_WHITE;
-            }
-
-            /* Final validation by trying to place hints */
-            if (valid) {
-                valid = valid && canHintsBePlaced(simulatedKnowledge, hints);
-            }
-
-            /* Skip this position if invalid */
-            if (!valid) {
-                continue;
-            }
-
-            /* This position is valid */
-            maxValidLeft = Math.max(maxValidLeft, x);
-            minValidRight = Math.min(minValidRight, x + hint);
+        /*
+         * If x is overlaid by the same hint in both solutions, it must be black.
+         * If x is overlaid by the same  gap in both solutions, it must be white.
+         */
+        if (lBlock.isGap !== rBlock.isGap) {
+            continue;
         }
 
-        /* If no valid position, then there is a contradiction */
-        if (maxValidLeft == Number.MIN_VALUE) {
+        if (lBlock.hintIdx !== rBlock.hintIdx) {
+            continue;
+        }
+
+        const newCellKnowledge = lBlock.isGap ? CellKnowledge.DEFINITELY_WHITE : CellKnowledge.DEFINITELY_BLACK;
+        const oppositeCellKnowledge = lBlock.isGap ? CellKnowledge.DEFINITELY_BLACK : CellKnowledge.DEFINITELY_WHITE;
+
+        if (lineKnowledge.cells[x] == oppositeCellKnowledge) {
             return new LineDeductionResult(DeductionStatus.WAS_IMPOSSIBLE, null);
         }
 
-        /* Cells inside the overlap are definitely black. Cells inside valid area, but outside of overlap are unknown */
-        for (let i = minValidRight - hint; i < maxValidLeft + hint; i++) {
-            const insideOverlap = i >= maxValidLeft && i < minValidRight;
-            newKnowledge.cells[i] = insideOverlap ? CellKnowledge.DEFINITELY_BLACK : lineKnowledge.cells[i];
+        newKnowledge.cells[x] = newCellKnowledge;
+    }
+
+    /* Check if any black cell block must be a full hint, in that case isolate it with white cells */
+    let blockLeft = /** @type {number | undefined} */ (undefined);
+    for (let x = 0; x <= lineLength; x++) {
+        /* Handle out of bounds by acting as if it were a white square */
+        const state = x < lineLength ? newKnowledge.cells[x] : CellKnowledge.DEFINITELY_WHITE;
+
+        /* On block start: Mark block start, move to end */
+        if (state == CellKnowledge.DEFINITELY_BLACK) {
+            if (!blockLeft) {
+                blockLeft = x;
+            }
+
+            continue;
         }
+
+        /* On nonblack block: Just continue if this is not marking a block end */
+        if (!blockLeft) {
+            continue;
+        }
+
+        /* x marks a block end. Find corresponding hints in left and right solution. */
+        const lHintIdx = findLastPredecessorIdx(lSol, blockLeft);
+        const rHintIdx = findLastPredecessorIdx(rSol, blockLeft);
+
+
+        /* Check if all hints that can cover this block have the same length as the block. */
+        const blockLength = x - blockLeft;
+        let blockIsDone = true;
+        for (let i = Math.min(lHintIdx, rHintIdx); i <= Math.max(lHintIdx, rHintIdx); i++) {
+            if (hints[i] > blockLength) {
+                blockIsDone = false;
+                break;
+            }
+        }
+
+        if (!blockIsDone) {
+            blockLeft = undefined;
+            continue;
+        }
+
+        /* Block is a full hint. Mark left and right of it as white. */
+        if (blockLeft - 1 >= 0) {
+            newKnowledge.cells[blockLeft - 1] = CellKnowledge.DEFINITELY_WHITE;
+        }
+
+        if (x < lineLength) {
+            newKnowledge.cells[x] = CellKnowledge.DEFINITELY_WHITE;
+        }
+
+        blockLeft = undefined;
     }
 
-    /* Check if anything changed */
-    let anythingChanged = false;
-    let anythingUnknown = false;
-
-    for (let i = 0; i < lineLength; i++) {
-        anythingUnknown = anythingUnknown || newKnowledge.cells[i] == CellKnowledge.UNKNOWN;
-        anythingChanged = anythingChanged || newKnowledge.cells[i] != lineKnowledge.cells[i];
+    /* Check if any deduction was made at all and if the line is solved. */
+    let allSolved = true;
+    let anyChanged = false;
+    for (let x = 0; x < lineLength; x++) {
+        allSolved = allSolved && newKnowledge.cells[x] != CellKnowledge.UNKNOWN;
+        anyChanged = anyChanged || newKnowledge.cells[x] != lineKnowledge.cells[x];
     }
 
-    /* Return result */
-    if (!anythingChanged && !anythingUnknown) {
-        return new LineDeductionResult(DeductionStatus.WAS_SOLVED, newKnowledge);
-    } else if (!anythingChanged) {
-        return new LineDeductionResult(DeductionStatus.COULD_NOT_DEDUCE, newKnowledge);
+    /* Done */
+    if (!anyChanged) {
+        const status = allSolved ? DeductionStatus.WAS_SOLVED : DeductionStatus.COULD_NOT_DEDUCE;
+        return new LineDeductionResult(status, null);
     } else {
         return new LineDeductionResult(DeductionStatus.DEDUCTION_MADE, newKnowledge);
     }
 }
 
+class ContainedBlockResult {
+    /**
+     * @param {number} hintIdx 
+     * @param {boolean} isGap 
+     */
+    constructor(hintIdx, isGap) {
+        this.hintIdx = hintIdx;
+        this.isGap = isGap;
+    }
+}
+
 /**
- * Checks if the given hints can still be placed onto the given line.
+ * Returns
+ * 
+ * @param {number} x 
+ * @param {Array<number>} hints 
+ * @param {Array<number>} solution 
+ * @returns {ContainedBlockResult}
+ */
+function calcContainedBlock(x, hints, solution) {
+    if (hints.length != solution.length) {
+        throw new Error("Solution must have as many entries as there are hints");
+    }
+
+    const idx = findLastPredecessorIdx(solution, x);
+    const isGap = idx == -1 || x >= solution[idx] + hints[idx];
+
+    return new ContainedBlockResult(idx, isGap);
+}
+
+/**
+ * Finds the rightmost valid solution for the given line.
  * 
  * @param {LineKnowledge} lineKnowledge 
  * @param {Array<number>} hints
- * @returns {boolean} 
+ * @returns {Array<number> | undefined}
  */
-function canHintsBePlaced(lineKnowledge, hints) {
-    /* No hints => No black squares must exist */
-    if (hints.length == 0) {
-        return !lineKnowledge.cells.some(cell => cell == CellKnowledge.DEFINITELY_BLACK);
-    }
-
-    /* Place first hint, then recurse */
+function rightmostSolution(lineKnowledge, hints) {
     const lineLength = lineKnowledge.cells.length;
-    const hintSum = hints.reduce((a, b) => a + b, 0);
 
-    if (hintSum + hints.length - 1 > lineLength) {
-        return false;
+    /* Reverse line and simply use leftSol(...) */
+    const reversedLine = new LineKnowledge([...lineKnowledge.cells].reverse());
+    const reversedHints = [...hints].reverse();
+    const reversedSolution = leftmostSolution(reversedLine, reversedHints);
+
+    /* Just return if no solution */
+    if (!reversedSolution) {
+        return undefined;
     }
 
-    const maxPos = lineLength - hintSum - hints.length + 1;
+    /* Each number in the solution currently points to the leftmost cell in the _reversed_ view, we need to fix that */
+    for (let i = 0; i < reversedSolution.length; i++) {
+        reversedSolution[i] = lineLength - reversedSolution[i] - hints[hints.length - i - 1];
+    }
 
-    for (let i = 0; i <= maxPos; i++) {
-        const endIdx = i + hints[0];
+    /* Create solution for original line */
+    return reversedSolution.reverse();
+}
 
-        /* Check if placement is valid */
-        let placementValid = true;
-
-        /* Everything left from the hint must be white */
-        for (let j = 0; j < i; j++) {
-            if (lineKnowledge.cells[j] == CellKnowledge.DEFINITELY_BLACK) {
-                placementValid = false;
-                break;
+/**
+ * Finds the leftmost valid solution for the given line.
+ * 
+ * @param {LineKnowledge} lineKnowledge
+ * @param {Array<number>} hints
+ * @param {number} lineIdx
+ * @param {number} hintIdx
+ * @returns {Array<number> | undefined}
+ */
+function leftmostSolution( lineKnowledge, hints, lineIdx = 0, hintIdx = 0 ) {
+    const lineLength = lineKnowledge.cells.length;
+    const hint = hints[hintIdx];
+    
+    /* Base case: No hints */
+    if (!hint) {
+        for (let i = lineIdx; i < lineLength; i++) {
+            if (lineKnowledge.cells[i] == CellKnowledge.DEFINITELY_BLACK) {
+                return undefined;
+            }
+        } return [];
+    }
+    
+    const numRemainingHints = hints.length - hintIdx;
+    const remainingHintSum = hints.slice(hintIdx).reduce((a, b) => a + b, 0);
+    const minHintTotal = remainingHintSum + numRemainingHints - 1;
+    const maxHintX = lineLength - minHintTotal;
+    
+    /* Try every valid position of this hint, starting from left */
+    for (let x = lineIdx; x <= maxHintX; x++) {
+        /* Check validity of placement */
+        let valid = true;
+        for (let i = x; i < x + hint; i++) {
+            /* Invalid if a hint cell is definitely white */
+            if (i < lineLength && lineKnowledge.cells[i] == CellKnowledge.DEFINITELY_WHITE) {
+                valid = false; break;
             }
         }
-
-        /* Inside hint everything must be black-able */
-        for (let j = i; j < endIdx; j++) {
-            if (j >= lineLength) {
-                placementValid = false;
-                break;
-            }
-
-            if (lineKnowledge.cells[j] == CellKnowledge.DEFINITELY_WHITE) {
-                placementValid = false;
-                break;
+        
+        /* Invalid if cell next to hint is definitely black */
+        if (x + hint < lineLength && lineKnowledge.cells[x + hint] == CellKnowledge.DEFINITELY_BLACK) {
+            valid = false;
+        }
+        
+        /* Invalid if any cell before hint if definitely black */
+        for (let i = x - 1; i >= lineIdx; i--) {
+            if (lineKnowledge.cells[i] == CellKnowledge.DEFINITELY_BLACK) {
+                valid = false;
             }
         }
-
-        /* One next to the hint must be white */
-        if (endIdx < lineLength && lineKnowledge.cells[endIdx] == CellKnowledge.DEFINITELY_BLACK) {
-            placementValid = false;
-        }
-
+        
         /* Skip invalid placements */
-        if (!placementValid) {
+        if (!valid) {
             continue;
         }
-
-        /* Recurse */
-        const remainingKnowledge = new LineKnowledge(lineKnowledge.cells.slice(endIdx + 1));
-        const remainingHints = hints.slice(1);
-        if (canHintsBePlaced(remainingKnowledge, remainingHints)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
- * This function checks all possible configurations of the line. It skips configurations that are impossible w.r.t.
- * the given line knowledge.
- * Squares that are always black in all remaining configurations are deduced as black, vice versa for white. The
- * function returns the new deduced line knowledge, or null if the current line state is impossible.
- * 
- * @param {LineKnowledge} lineKnowledge 
- * @param {Array<number>} hints
- * @returns {LineDeductionResult}
- */
-function bruteForceLineDeduction(lineKnowledge, hints) {
-    const lineLength = lineKnowledge.cells.length;
-
-    /*
-     * For every valid configuration, the relevant item in this array will be OR-ed with 1 (0b01, black) or 
-     * (0b10, white). That way, cells that were always white will have a value of 2, cells that were always black a
-     * value of 1 and cells that were both in some combination a value of 3.
-     */
-    const newDeducedState = Array(lineLength).fill(0);
-
-    /** @type {Array<number>} */ 
-    let gaps = [];
-
-    do {
-        const configurationComplete = gaps.length == hints.length;
-        const gapsValid = checkGapValidity(lineKnowledge, hints, gaps);
-
-        /* If configuration is complete and valid: Write into new deduced state */
-        if (configurationComplete && gapsValid) {
-            traverseConfiguration(gaps, hints, lineLength, (idx, knowledge) => {
-                if (knowledge == CellKnowledge.UNKNOWN) {
-                    throw new Error("Configuration was complete, unknown is impossible.");
-                }
-
-                newDeducedState[idx] |= knowledge == CellKnowledge.DEFINITELY_BLACK ? 1 : 2;
-            });
-        }
-
-        nextConfiguration(hints, gaps, lineLength, gapsValid);
-    } while (gaps.length > 0);
-
-    /* Check if line is impossible */
-    if (newDeducedState[0] == 0) {
-        return new LineDeductionResult(DeductionStatus.WAS_IMPOSSIBLE, null);
-    }
-
-    /* Create new line knowledge */
-    const cells = [];
-    for (let i = 0; i < lineLength; i++) {
-        let knowledge;
-        switch (newDeducedState[i]) {
-            case 1: knowledge = CellKnowledge.DEFINITELY_BLACK; break;
-            case 2: knowledge = CellKnowledge.DEFINITELY_WHITE; break;
-            case 3: knowledge = CellKnowledge.UNKNOWN; break;
-            default: throw new Error("Deduced state was: " + newDeducedState[i]);
-        }
-
-        cells.push(knowledge);
-    }
-
-    const newKnowledge = new LineKnowledge(cells);
-    const deductionMade = !arraysEqual(newKnowledge.cells, lineKnowledge.cells);
-    const isSolved = !newKnowledge.cells.some(cell => cell == CellKnowledge.UNKNOWN);
-
-    let status;
-    if (deductionMade) {
-        status = DeductionStatus.DEDUCTION_MADE;
-    } else if (isSolved) {
-        status = DeductionStatus.WAS_SOLVED;
-    } else {
-        status = DeductionStatus.COULD_NOT_DEDUCE;
-    }
-
-    /* Done */
-    return new LineDeductionResult(status, newKnowledge);
-}
-
-/**
- * Modifies the given gaps array to represent the next configuration to attempt.
- * 
- * @param {Array<number>} hints 
- * @param {Array<number>} gaps 
- * @param {number} lineLength
- * @param {boolean} wasValid
- */
-function nextConfiguration(hints, gaps, lineLength, wasValid) {
-    const hintSum = hints.reduce((a, b) => a + b, 0);
-
-    /* If gaps are missing, simply add the next smallest gap */
-    if (wasValid && gaps.length < hints.length) {
-        const minGap = gaps.length == 0 ? 0 : 1;
-        gaps.push(minGap);
-        return;
-    }
-
-    /* Increment last gap, remove if it exceeds its maximum. Do this "recursively" */
-    while (gaps.length > 0) {
-        const gapSum = gaps.reduce((a, b) => a + b, 0);
-        const remainingGaps = hints.length - gaps.length;
-
-        const lastGap = gaps[gaps.length - 1];
-        const maxLastGap = lineLength - hintSum - (gapSum - lastGap) - remainingGaps;
-
-        /* If maximum was not reached: Simply increment gap */
-        if (lastGap < maxLastGap) {
-            gaps[gaps.length - 1] += 1;
-            break;
-        }
-
-        /* Pop and increment predecessor in the next loop iteration */
-        gaps.pop();
-    }
-}
-
-/**
- * Checks if the configuration described by the given gaps (which are applied before each hint) is compatible with the
- * given line knowledge.
- * 
- * @param {LineKnowledge} lineKnowledge 
- * @param {Array<number>} hints 
- * @param {Array<number>} gaps
- * @returns {boolean}
- */
-function checkGapValidity(lineKnowledge, hints, gaps) {
-    const lineLength = lineKnowledge.cells.length;
-    let valid = true;
-    
-    traverseConfiguration(gaps, hints, lineLength, (idx, knowledge) => {
-        const curKnowledge = lineKnowledge.cells[idx];
         
-        if (curKnowledge == CellKnowledge.DEFINITELY_BLACK && knowledge == CellKnowledge.DEFINITELY_WHITE) {
-            valid = false;
+        /* Find leftmost solution for remaining line */
+        const remainingSolution = leftmostSolution(lineKnowledge, hints, x + hint + 1, hintIdx + 1);
+        if (!remainingSolution) {
+            continue;
         }
-
-        if (curKnowledge == CellKnowledge.DEFINITELY_WHITE && knowledge == CellKnowledge.DEFINITELY_BLACK) {
-            valid = false;
-        }
-    });
-
-    return valid;
+        
+        const finalSolution = [x];
+        remainingSolution.forEach(pos => finalSolution.push(pos));
+        return finalSolution;
+    }
+    
+    return undefined;
 }
 
 /**
- * Given a configuration of gaps and hints, performs the function fn on each cell of the line. The function gets the
- * information whether the cell is black, white or undetermined in this configuration.
+ * Returns the index of the last element in arr that is smaller than or equal to x. If x is smaller than all elements, 
+ * returns -1.
  * 
- * @param {Array<number>} gaps 
- * @param {Array<number>} hints 
- * @param {number} lineLength 
- * @param {(index: number, knowledge: CellKnowledge) => void} fn 
+ * @param {Array<number>} arr 
+ * @param {number} x 
+ * @returns {number}
  */
-function traverseConfiguration(gaps, hints, lineLength, fn) {
-    /* Preconditions */
-    if (gaps.length > hints.length) {
-        throw new Error("There can be at most as many gaps as there are hints. The final gap is deduced.");
+function findLastPredecessorIdx(arr, x) {
+    if (arr.length == 0 || arr[0] > x) {
+        return -1;
     }
 
-    if (gaps.reduce((a, b) => a + b, 0) + hints.reduce((a, b) => a + b, 0) > lineLength) {
-        throw new Error("Sum of gaps and hints exceed line length");
-    }
-
-    for (let i = 0; i < gaps.length; i++) {
-        const minGap = (i == 0) ? 0 : 1;
-        if (gaps[i] < minGap) {
-            throw new Error("Gap is too small!");
+    for (let i = 0; i < arr.length - 1; i++) {
+        if (arr[i + 1] > x) {
+            return i;
         }
     }
 
-    /* Special case: Empty line */
-    if (hints.length == 0) {
-        for (let i = 0; i < lineLength; i++) {
-            fn(i, CellKnowledge.DEFINITELY_WHITE);
-        }
+    return arr.length - 1;
+}
 
-        return;
+/**
+ * Really shitty priority queue
+ *
+ * @template T
+ */
+class PriorityQueue {
+    /** @type {Array<PriorityQueueEntry<T>>} */
+    #arr = [];
+
+    #keyFunc;
+
+    /**
+     * @param {(val: T) => number} keyFunc 
+     */
+    constructor(keyFunc) {
+        this.#keyFunc = keyFunc;
     }
 
-    /* Special case: No gaps yet, everything is possible. */
-    if (gaps.length == 0) {
-        for (let i = 0; i < lineLength; i++) {
-            fn(i, CellKnowledge.UNKNOWN);
+    /**
+     * Adds an element to the queue.
+     * 
+     * @param {T} value 
+     */
+    push(value) {
+        const key = this.#keyFunc(value);
+        let i = 0;
+        
+        /* Move to first entry with a larger key */
+        while (i < this.#arr.length && this.#arr[i].key < key) {
+            i += 1;
         }
 
-        return;
+        /* Insert there */
+        const entry = new PriorityQueueEntry(value, key);
+        this.#arr.splice(i, 0, entry);
     }
 
-    /* Default case: Iterate over gaps and hints */
-    let curIdx = 0;
-    for (let i = 0; i < gaps.length; i++) {
-        const curGap = gaps[i];
-        const curHint = hints[i];
-
-        /* Gap */
-        for (let j = 0; j < curGap; j++) {
-            fn(curIdx, CellKnowledge.DEFINITELY_WHITE)
-            curIdx += 1;
-        }
-
-        /* Hint */
-        for (let j = 0; j < curHint; j++) {
-            fn(curIdx, CellKnowledge.DEFINITELY_BLACK)
-            curIdx += 1;
-        }
+    /**
+     * Returns the element with the largest key from the queue.
+     * 
+     * @returns {T | undefined}
+     */
+    pop() {
+        return this.#arr.pop()?.value;
     }
 
-    /* After the last hint there must be a gap */
-    if (curIdx < lineLength) {
-        fn(curIdx, CellKnowledge.DEFINITELY_WHITE);
-        curIdx += 1;
+    size() {
+        return this.#arr.length;
     }
 
-    /* If the line is fully determined, all remaining squares are white */
-    while (curIdx < lineLength) {
-        fn(curIdx, gaps.length == hints.length ? CellKnowledge.DEFINITELY_WHITE : CellKnowledge.UNKNOWN);
-        curIdx += 1;
+    get arr() {
+        return this.#arr.map(entry => entry.value);
+    }
+}
+
+/**
+ * @template T
+ */
+class PriorityQueueEntry {
+    #value;
+    #key;
+
+    /**
+     * 
+     * @param {T} value 
+     * @param {number} key 
+     */
+    constructor(value, key) {
+        this.#value = value;
+        this.#key = key;
+    }
+
+    get value() {
+        return this.#value;
+    }
+
+    get key() {
+        return this.#key;
     }
 }
