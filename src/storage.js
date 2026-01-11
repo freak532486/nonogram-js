@@ -11,6 +11,7 @@ const STORAGE_KEY = "storage_v0.01"
  */
 export function retrieveStoredState(nonogramId) {
     const storage = fetchStorage();
+
     return storage.entries.find(entry => entry.nonogramId == nonogramId)?.state ?? null;
 }
 

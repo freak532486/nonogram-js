@@ -188,6 +188,76 @@ export function deduceNext(state) {
     );
 }
 
+export class HintCheckResult {
+    /**
+     * @param {LineKnowledge} newKnowledge 
+     * @param {Array<number>} finishedHints List of indices referencing hints that are finished.
+     */
+    constructor(newKnowledge, finishedHints) {
+        this.newKnowledge = newKnowledge;
+        this.finishedHints = finishedHints;
+    }
+}
+
+/**
+ * Checks which hints in the given line are finished and can be crossed out. In addition to that, also deduces which
+ * squares can definitely be crossed out because some hints are finished.
+ * 
+ * Returns undefined if the hints cannot be placed anymore. In that case, the line contains an error.
+ * 
+ * @param {LineKnowledge} lineKnowledge
+ * @param {Array<Number>} hints 
+ * @returns {HintCheckResult | undefined}
+ */
+export function checkHints(lineKnowledge, hints) {
+    const deduction = overlapLineDeduction(lineKnowledge, hints, false);
+
+    /* Detect impossible configuration */
+    if (!deduction.lineDeductionResult.newKnowledge) {
+        return undefined;
+    }
+
+    /* Extra check: If all hints are finished, all unknown cells are white */
+    if (deduction.finishedHints.length == hints.length) {
+        const newKnowledge = deduction.lineDeductionResult.newKnowledge;
+        for (let i = 0; i < newKnowledge.cells.length; i++) {
+            if (newKnowledge.cells[i] == CellKnowledge.UNKNOWN) {
+                newKnowledge.cells[i] = CellKnowledge.DEFINITELY_WHITE;
+            }
+        }
+    }
+
+    /* Extra check: If the first hint is finished, all previous cells are white */
+    if (deduction.finishedHints.indexOf(0) !== -1) {
+        let x = 0;
+        while (lineKnowledge.cells[x] !== CellKnowledge.DEFINITELY_BLACK) {
+            deduction.lineDeductionResult.newKnowledge.cells[x] = CellKnowledge.DEFINITELY_WHITE;
+            x += 1;
+        }
+    }
+
+    /* Extra check: If the last hint is finished, all next cells are white */
+    if (deduction.finishedHints.indexOf(hints.length - 1) !== -1) {
+        let x = lineKnowledge.cells.length - 1;
+        while (lineKnowledge.cells[x] !== CellKnowledge.DEFINITELY_BLACK) {
+            deduction.lineDeductionResult.newKnowledge.cells[x] = CellKnowledge.DEFINITELY_WHITE;
+            x -= 1;
+        }
+    }
+
+    /* Special case: Empty hints and empty line */
+    if (hints.length == 0) {
+        if (!lineKnowledge.cells.some(x => x != CellKnowledge.DEFINITELY_WHITE)) {
+            deduction.finishedHints = [0];
+        } else {
+            deduction.lineDeductionResult.newKnowledge = lineKnowledge;
+        }
+    }
+
+    /* Return */
+    return new HintCheckResult(deduction.lineDeductionResult.newKnowledge, deduction.finishedHints);
+}
+
 /**
  * Returns the key function for sorting lines.
  * 
@@ -237,7 +307,7 @@ function deduceLine(state, job) {
         state.colHints[lineId.index];
 
     switch (mode) {
-        case DeductionMode.OVERLAP: return overlapLineDeduction(curKnowledge, hints);
+        case DeductionMode.OVERLAP: return overlapLineDeduction(curKnowledge, hints).lineDeductionResult;
         case DeductionMode.EXHAUSTIVE: return exhaustiveLineDeduction(curKnowledge, hints);
         default: throw new Error("Unknown mode: " + mode);
     }
@@ -261,29 +331,55 @@ class LineDeductionResult {
     }
 }
 
+class OverlapDeductionResult {
+    /**
+     * 
+     * @param {LineDeductionResult} lineDeductionResult 
+     * @param {Array<number>} finishedHints 
+     */
+    constructor (lineDeductionResult, finishedHints) {
+        this.lineDeductionResult = lineDeductionResult;
+        this.finishedHints = finishedHints;
+    }
+
+    /**
+     * 
+     * @param {DeductionStatus} status 
+     * @returns {OverlapDeductionResult}
+     */
+    static noDeduction(status) {
+        return new OverlapDeductionResult(new LineDeductionResult(status, null), []);
+    }
+}
 
 /**
-* 
-* @param {LineKnowledge} lineKnowledge 
-* @param {Array<number>} hints
-* @returns {LineDeductionResult}
-*/
-function overlapLineDeduction(lineKnowledge, hints) {
+ * Performs a deduction on a line by overlapping left- and rightmost solutions.
+ * 
+ * If deduceFull is false, overlap deduction is not done. It is only checked whether blocks of black cells finish a
+ * hint. If yes, the finished hint is recorded and its neighbours are crossed out.
+ *  
+ * @param {LineKnowledge} lineKnowledge 
+ * @param {Array<number>} hints
+ * @param {boolean} deduceFull
+ * @returns {OverlapDeductionResult}
+ */
+function overlapLineDeduction(lineKnowledge, hints, deduceFull = true) {
     const lineLength = lineKnowledge.cells.length;
     const newKnowledge = new LineKnowledge([...lineKnowledge.cells]);
+    const finishedHints = [];
 
     /* Get leftmost and rightmost solution */
-    let ts = Date.now();
     const lSol = leftmostSolution(lineKnowledge, hints);
     const rSol = rightmostSolution(lineKnowledge, hints);
 
     /* No solution found => Impossible */
     if (!lSol || !rSol) {
-        return new LineDeductionResult(DeductionStatus.WAS_IMPOSSIBLE, null);
+        return OverlapDeductionResult.noDeduction(DeductionStatus.WAS_IMPOSSIBLE);
     }
 
     /* Check each cell for hint or gap overlap */
-    for (let x = 0; x < lineLength; x++) {
+    const xEnd = deduceFull ? lineLength : 0;
+    for (let x = 0; x < xEnd; x++) {
         /* Calculate which block (hint or gap) overlays x */
         const lBlock = calcContainedBlock(x, hints, lSol);
         const rBlock = calcContainedBlock(x, hints, rSol);
@@ -304,7 +400,7 @@ function overlapLineDeduction(lineKnowledge, hints) {
         const oppositeCellKnowledge = lBlock.isGap ? CellKnowledge.DEFINITELY_BLACK : CellKnowledge.DEFINITELY_WHITE;
 
         if (lineKnowledge.cells[x] == oppositeCellKnowledge) {
-            return new LineDeductionResult(DeductionStatus.WAS_IMPOSSIBLE, null);
+            return OverlapDeductionResult.noDeduction(DeductionStatus.WAS_IMPOSSIBLE);
         }
 
         newKnowledge.cells[x] = newCellKnowledge;
@@ -318,7 +414,7 @@ function overlapLineDeduction(lineKnowledge, hints) {
 
         /* On block start: Mark block start, move to end */
         if (state == CellKnowledge.DEFINITELY_BLACK) {
-            if (!blockLeft) {
+            if (blockLeft == undefined) {
                 blockLeft = x;
             }
 
@@ -326,14 +422,13 @@ function overlapLineDeduction(lineKnowledge, hints) {
         }
 
         /* On nonblack block: Just continue if this is not marking a block end */
-        if (!blockLeft) {
+        if (blockLeft == undefined) {
             continue;
         }
 
         /* x marks a block end. Find corresponding hints in left and right solution. */
         const lHintIdx = findLastPredecessorIdx(lSol, blockLeft);
         const rHintIdx = findLastPredecessorIdx(rSol, blockLeft);
-
 
         /* Check if all hints that can cover this block have the same length as the block. */
         const blockLength = x - blockLeft;
@@ -359,11 +454,17 @@ function overlapLineDeduction(lineKnowledge, hints) {
             newKnowledge.cells[x] = CellKnowledge.DEFINITELY_WHITE;
         }
 
+        /* If block is the same hint in leftmost and rightmost solution, that hint can be crossed out */
+        if (lHintIdx == rHintIdx) {
+            finishedHints.push(lHintIdx);
+        }
+
         blockLeft = undefined;
     }
 
     /* Done */
-    return deductionResult(lineKnowledge, newKnowledge);
+    const res = deductionResult(lineKnowledge, newKnowledge);
+    return new OverlapDeductionResult(res, finishedHints);
 }
 
 class ContainedBlockResult {
@@ -462,7 +563,7 @@ function deductionResult(lineKnowledge, newKnowledge) {
     /* Done */
     if (!anyChanged) {
         const status = allSolved ? DeductionStatus.WAS_SOLVED : DeductionStatus.COULD_NOT_DEDUCE;
-        return new LineDeductionResult(status, null);
+        return new LineDeductionResult(status, newKnowledge);
     } else {
         return new LineDeductionResult(DeductionStatus.DEDUCTION_MADE, newKnowledge);
     }

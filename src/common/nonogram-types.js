@@ -32,6 +32,22 @@ export class LineId {
         this.#index = index;
     }
 
+    /**
+     * @param {number} y 
+     * @returns {LineId}
+     */
+    static row(y) {
+        return new LineId(LineType.ROW, y);
+    }
+
+    /**
+     * @param {number} x 
+     * @returns {LineId}
+     */
+    static column(x) {
+        return new LineId(LineType.COLUMN, x);
+    }
+
     get lineType() {
         return this.#lineType;
     }

@@ -94,7 +94,7 @@
 }
 
 #control-pad #control-black::before {
-    mask-image: url("/images/square.png");
+    mask-image: url("/images/black.png");
 }
 
 #control-pad #control-white {

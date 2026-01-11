@@ -1,9 +1,9 @@
 import * as storage from "../storage.js"
-import { CellKnowledge, DeductionStatus, LineId, NonogramState, SingleDeductionResult } from "../common/nonogram-types.js";
+import { CellKnowledge, DeductionStatus, LineId, LineKnowledge, LineType, NonogramState, SingleDeductionResult } from "../common/nonogram-types.js";
 import { Point } from "../common/point.js";
 import { loadHtml } from "../loader.js";
 import { Menu } from "../menu/menu.component.js";
-import { deduceAll, deduceNext } from "../solver.js";
+import { checkHints, deduceAll, deduceNext, HintCheckResult } from "../solver.js";
 import { ControlPad, ControlPadButton } from "./control-pad/control-pad.component.js";
 import { MessageBox } from "./message-box/message-box.component.js";
 import { BoardComponentFullState, NonogramBoardComponent } from "./nonogram-board/nonogram-board.component.js";
@@ -11,6 +11,7 @@ import { ZoomWindow } from "./zoom-window/zoom-window.component.js";
 
 import playfield from "./playfield.html"
 import "./playfield.css"
+import { LineIdSet } from "../common/line-id-set.js";
 
 export class PlayfieldComponent {
 
@@ -87,7 +88,15 @@ export class PlayfieldComponent {
             }
 
             state.applyDeduction(deduction);
-            this.#nonogramBoard.applyState(new BoardComponentFullState(state.getCellStates()));
+
+            const oldState = this.#nonogramBoard.getFullState().cells;
+            this.#nonogramBoard.applyState(new BoardComponentFullState(
+                state.getCellStates(),
+                this.#nonogramBoard.getFullState().finishedRowHints,
+                this.#nonogramBoard.getFullState().finishedColHints,
+                this.#nonogramBoard.getFullState().errorLines
+            ));
+            this.#recheckLineHints(oldState);
             this.#updateHistory();
         };
         menu.appendElement(nextButton);
@@ -103,7 +112,16 @@ export class PlayfieldComponent {
             const deduction = deduceAll(state);
 
             this.#messageBox.showMessage(getTextForStatus(deduction.status));
-            this.#nonogramBoard.applyState(new BoardComponentFullState(deduction.newState.getCellStates()));
+
+            const oldState = this.#nonogramBoard.getFullState().cells;
+            this.#nonogramBoard.applyState(new BoardComponentFullState(
+                deduction.newState.getCellStates(),
+                this.#nonogramBoard.getFullState().finishedRowHints,
+                this.#nonogramBoard.getFullState().finishedColHints,
+                this.#nonogramBoard.getFullState().errorLines
+            ));
+            this.#recheckLineHints(oldState);
+            
             this.#updateHistory();
             if (deduction.status !== DeductionStatus.WAS_SOLVED) {
                 return;
@@ -150,6 +168,10 @@ export class PlayfieldComponent {
             this.#nonogramBoard.applyState(storedState);
         }
 
+        /* Recheck hints */
+        const emptyState = Array(this.#nonogramBoard.width * this.#nonogramBoard.height).fill(CellKnowledge.UNKNOWN);
+        this.#recheckLineHints(emptyState);
+
         /* Prepare history */
         this.#stateHistory.push(this.#nonogramBoard.getFullState());
     }
@@ -179,11 +201,16 @@ export class PlayfieldComponent {
         controlPad.setButtonFunction(ControlPadButton.RIGHT, () => this.#moveSelectionAndSet(1, 0));
         controlPad.setButtonFunction(ControlPadButton.DOWN, () => this.#moveSelectionAndSet(0, 1));
         controlPad.setButtonFunction(ControlPadButton.ERASE, () => {
-            this.#nonogramBoard.setCellState(
-                this.#nonogramBoard.selection.x,
-                this.#nonogramBoard.selection.y,
-                CellKnowledge.UNKNOWN
-            );
+            const x = this.#nonogramBoard.selection.x;
+            const y = this.#nonogramBoard.selection.y;
+            const curState = this.#nonogramBoard.getFullState().cells;
+
+            if (this.#nonogramBoard.getCellState(x, y) == CellKnowledge.UNKNOWN) {
+                return;
+            }
+
+            this.#recheckLineHints(curState);
+            this.#nonogramBoard.setCellState(x, y, CellKnowledge.UNKNOWN);
             this.#updateHistory();
         })
 
@@ -198,16 +225,7 @@ export class PlayfieldComponent {
                     this.#lineType = CellKnowledge.DEFINITELY_BLACK;
                     this.#supplyNextLineSegment(p);
                 } else if (this.#lineType != null) {
-                    /* Apply line */
-                    for (const p of this.#line) {
-                        this.#nonogramBoard.setCellState(p.x, p.y, this.#lineType);
-                    }
-                    this.#updateHistory();
-
-                    /* Clear line */
-                    this.#lineType = null;
-                    this.#line.length = 0;
-                    this.#nonogramBoard.clearLinePreview();
+                    this.#applyLine();
                 }
         });
         controlPad.setButtonFunction(ControlPadButton.WHITE, () => { 
@@ -221,16 +239,7 @@ export class PlayfieldComponent {
                     this.#lineType = CellKnowledge.DEFINITELY_WHITE;
                     this.#supplyNextLineSegment(p);
                 } else if (this.#lineType != null) {
-                    /* Apply line */
-                    for (const p of this.#line) {
-                        this.#nonogramBoard.setCellState(p.x, p.y, this.#lineType);
-                    }
-                    this.#updateHistory();
-
-                    /* Clear line */
-                    this.#lineType = null;
-                    this.#line.length = 0;
-                    this.#nonogramBoard.clearLinePreview();
+                    this.#applyLine();
                 }
         });
 
@@ -273,6 +282,44 @@ export class PlayfieldComponent {
             undoButton.style.visibility = "visible";
             redoButton.style.visibility = (this.#activeStateIdx == this.#stateHistory.length - 1) ? "hidden" : "visible";
         };
+    }
+
+    #applyLine() {
+        /* Nothing to do if there is no line */
+        if (!this.#lineType) {
+            return;
+        }
+
+        /* Remember already checked lines */
+        const width = this.#nonogramBoard.width;
+        const curState = this.#nonogramBoard.getFullState().cells;
+        const newState = [...curState];
+
+        for (const p of this.#line) {
+            /* Nothing to do if no change */
+            if (curState[p.x + p.y * width] == this.#lineType) {
+                continue;
+            }
+            
+            /* Change state */
+            newState[p.x + p.y * width] = this.#lineType;
+        }
+
+        /* Perform checks */
+        this.#nonogramBoard.applyState(new BoardComponentFullState(
+            newState,
+            this.#nonogramBoard.getFullState().finishedRowHints,
+            this.#nonogramBoard.getFullState().finishedColHints,
+            this.#nonogramBoard.getFullState().errorLines
+        ));
+        this.#recheckLineHints(curState);
+
+        /* Update history and clear line */
+        this.#updateHistory();
+
+        this.#line = [];
+        this.#lineType = null;
+        this.#nonogramBoard.clearLinePreview();
     }
 
     /**
@@ -360,7 +407,7 @@ export class PlayfieldComponent {
     }
 
     /**
-     * Moves the selection on the nonogram board. If drawing is toggled, this also sets a cell.
+     * Moves the selection on the nonogram board and extends the current line.
      * 
      * @param {number} dx 
      * @param {number} dy 
@@ -408,6 +455,64 @@ export class PlayfieldComponent {
         redoButton.style.visibility = "hidden";
     }
 
+    /**
+     * Rechecks the line hints for all changed lines between the current state and the given previous state.
+     * 
+     * @param {Array<CellKnowledge>} prevState 
+     */
+    #recheckLineHints(prevState) {
+        const curState = this.#nonogramBoard.getFullState().cells;
+        const changed = calcChangedLines(this.#nonogramBoard.width, this.#nonogramBoard.height, prevState, curState);
+
+        for (const line of changed.asArray()) {
+            const lineKnowledge = this.getLineKnowledge(line);
+            const hints = this.getHints(line);
+            this.#applyHintCheckDeduction(line, checkHints(lineKnowledge, hints));
+        }
+    }
+
+    /**
+     * Returns the current line knowledge of the given line.
+     * 
+     * @param {LineId} lineId
+     * @returns {LineKnowledge}
+     */
+    getLineKnowledge(lineId) {
+        return this.#nonogramBoard.getLineState(lineId);
+    }
+
+    /**
+     * Returns the hints for the given line.
+     * 
+     * @param {LineId} lineId 
+     * @returns {Array<number>}
+     */
+    getHints(lineId) {
+        const relevantHints = lineId.lineType == LineType.ROW ?
+            this.#nonogramBoard.rowHints :
+            this.#nonogramBoard.colHints;
+        
+        return relevantHints[lineId.index];
+    }
+
+    /**
+     * 
+     * @param {LineId} lineId 
+     * @param {HintCheckResult | undefined} deduction 
+     */
+    #applyHintCheckDeduction(lineId, deduction) {
+        /* If no deduction possible, mark an error for this line */
+        if (!deduction) {
+            this.#nonogramBoard.markError(lineId, true);
+            return;
+        }
+
+        /* Update finished hints and apply new knowledge */
+        this.#nonogramBoard.markError(lineId, false);
+        this.#nonogramBoard.updateFinishedHints(lineId, deduction.finishedHints);
+        this.#nonogramBoard.applyLineKnowledge(lineId, deduction.newKnowledge);
+    }
+
     get view() {
         if (this.#view == null) {
             throw new Error("init() was not called");
@@ -447,4 +552,28 @@ function getTextForStatus(status) {
     }
 
     throw new Error("Unknown status: " + status);
+}
+
+/**
+ * Calculates which lines have changed between the two states.
+ * 
+ * @param {number} width
+ * @param {number} height 
+ * @param {Array<CellKnowledge>} oldState
+ * @param {Array<CellKnowledge>} newState
+ * @returns {LineIdSet} 
+ */
+function calcChangedLines(width, height, oldState, newState) {
+    const ret = new LineIdSet();
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (oldState[x + y * width] !== newState[x + y * width]) {
+                ret.add(new LineId(LineType.ROW, y));
+                ret.add(new LineId(LineType.COLUMN, x));
+            }
+        }
+    }
+
+    return ret;
 }
