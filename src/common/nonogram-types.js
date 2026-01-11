@@ -140,14 +140,16 @@ export class NonogramState {
 
     /**
      * Creates an empty board.
+     * @param {number} width 
+     * @param {number} height
      * @param {Array<Array<number>>} rowHints 
      * @param {Array<Array<number>>} colHints
      * @param {Array<CellKnowledge>} cells
      * 
      */
-    constructor (rowHints, colHints, cells) {
-        this.#width = colHints.length;
-        this.#height = rowHints.length;
+    constructor (width, height, rowHints, colHints, cells) {
+        this.#width = width;
+        this.#height = height;
         this.#rowHints = rowHints;
         this.#colHints = colHints;
         this.#cells = cells;
@@ -156,15 +158,15 @@ export class NonogramState {
     /**
      * Creates an empty nonogram board state.
      * 
+     * @param {number} width 
+     * @param {number} height
      * @param {Array<Array<number>>} rowHints 
      * @param {Array<Array<number>>} colHints
      * @returns {NonogramState}
      */
-    static empty(rowHints, colHints) {
-        const width = colHints.length;
-        const height = rowHints.length;
+    static empty(width, height, rowHints, colHints) {
         const cells = Array(width * height).fill(CellKnowledge.UNKNOWN);
-        return new NonogramState(rowHints, colHints, cells);
+        return new NonogramState(width, height, rowHints, colHints, cells);
     }
 
     /**
@@ -174,7 +176,7 @@ export class NonogramState {
      * @returns {NonogramState}
      */
     static clone(state) {
-        return new NonogramState(state.rowHints, state.colHints, [...state.#cells]);
+        return new NonogramState(state.width, state.height, state.rowHints, state.colHints, [...state.#cells]);
     }
 
     get width() {
@@ -254,19 +256,22 @@ export class NonogramState {
     }
 
     /**
-     * Overwrite the current knowledge inside a line.
+     * Applies a deduction to this state.
      * 
-     * @param {LineId} lineId
-     * @param {LineKnowledge} lineKnowledge
+     * @param {SingleDeductionResult} deduction 
      */
-    replaceLineKnowledge(lineId, lineKnowledge) {
-        if (lineId.lineType == LineType.ROW) {
+    applyDeduction(deduction) {
+        if (deduction.status != DeductionStatus.DEDUCTION_MADE) {
+            return;
+        }
+
+        if (deduction.lineId.lineType == LineType.ROW) {
             for (let x = 0; x < this.#width; x++) {
-                this.updateCell(x, lineId.index, lineKnowledge.cells[x]);
+                this.updateCell(x, deduction.lineId.index, deduction.newKnowledge.cells[x]);
             }
         } else {
             for (let y = 0; y < this.#height; y++) {
-                this.updateCell(lineId.index, y, lineKnowledge.cells[y]);
+                this.updateCell(deduction.lineId.index, y, deduction.newKnowledge.cells[y]);
             }
         }
     }
