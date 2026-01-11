@@ -227,6 +227,15 @@ export function checkHints(lineKnowledge, hints) {
         }
     }
 
+    /* Special case: Empty hints and empty line */
+    if (hints.length == 0) {
+        if (!lineKnowledge.cells.some(x => x != CellKnowledge.DEFINITELY_WHITE)) {
+            deduction.finishedHints = [0];
+        } else {
+            deduction.lineDeductionResult.newKnowledge = lineKnowledge;
+        }
+    }
+
     /* Return */
     return new HintCheckResult(deduction.lineDeductionResult.newKnowledge, deduction.finishedHints);
 }
@@ -400,9 +409,6 @@ function overlapLineDeduction(lineKnowledge, hints, deduceFull = true) {
         }
 
         /* x marks a block end. Find corresponding hints in left and right solution. */
-        if (hints.length == 2 && hints[0] == 5 && hints[1] == 4) {
-            console.log("hi");
-        }
         const lHintIdx = findLastPredecessorIdx(lSol, blockLeft);
         const rHintIdx = findLastPredecessorIdx(rSol, blockLeft);
 
