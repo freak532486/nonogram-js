@@ -152,6 +152,7 @@ export class PlayfieldComponent {
             this.#activeStateIdx = 0;
             this.controlPad.getButton(ControlPadButton.UNDO).style.visibility = "hidden";
             this.controlPad.getButton(ControlPadButton.REDO).style.visibility = "hidden";
+            this.#hasWon = false;
             this.#timer.paused = false;
             this.#timer.restart();
         }
