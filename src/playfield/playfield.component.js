@@ -3,7 +3,7 @@ import { CellKnowledge, DeductionStatus, LineId, LineKnowledge, LineType, Nonogr
 import { Point } from "../common/point.js";
 import { loadHtml } from "../loader.js";
 import { Menu } from "../menu/menu.component.js";
-import { checkHints, deduceAll, deduceNext, HintCheckResult } from "../solver.js";
+import { checkHints, deduceAll, deduceNext, HintCheckResult, isSolved } from "../solver.js";
 import { ControlPad, ControlPadButton } from "./control-pad/control-pad.component.js";
 import { MessageBox } from "./message-box/message-box.component.js";
 import { BoardComponentFullState, NonogramBoardComponent } from "./nonogram-board/nonogram-board.component.js";
@@ -39,6 +39,8 @@ export class PlayfieldComponent {
     #activeStateIdx = 0;
 
     #menu;
+
+    #hasWon = false;
 
     #onExit = () => {};
 
@@ -150,6 +152,8 @@ export class PlayfieldComponent {
             this.#activeStateIdx = 0;
             this.controlPad.getButton(ControlPadButton.UNDO).style.visibility = "hidden";
             this.controlPad.getButton(ControlPadButton.REDO).style.visibility = "hidden";
+            this.#timer.paused = false;
+            this.#timer.restart();
         }
         menu.appendElement(resetButton);
 
@@ -176,12 +180,12 @@ export class PlayfieldComponent {
             ));
         }
 
+        /* Prepare history */
+        this.#stateHistory.push(this.#nonogramBoard.getFullState());
+
         /* Recheck hints */
         const emptyState = Array(this.#nonogramBoard.width * this.#nonogramBoard.height).fill(CellKnowledge.UNKNOWN);
         this.#recheckLineHints(emptyState);
-
-        /* Prepare history */
-        this.#stateHistory.push(this.#nonogramBoard.getFullState());
     }
 
     /** Should be called after removing the playfield from the screen */
@@ -327,6 +331,7 @@ export class PlayfieldComponent {
 
         /* Update history and clear line */
         this.#updateHistory();
+        this.#checkWin();
 
         this.#line = [];
         this.#lineType = null;
@@ -481,7 +486,8 @@ export class PlayfieldComponent {
             const curState = this.#nonogramBoard.getFullState().cells;
             const changed = calcChangedLines(this.#nonogramBoard.width, this.#nonogramBoard.height, actualPrevState, curState);
             if (changed.size == 0) {
-                break;
+                this.#checkWin(); // Crosses from line hints can cause a win.
+                return;
             }
 
             for (const line of changed.asArray()) {
@@ -495,6 +501,23 @@ export class PlayfieldComponent {
         }
 
         console.error("Canceled hint checking after " + LOOP_LIMIT + " iterations");
+    }
+
+    #checkWin() {
+        /* Do not display win message twice */
+        if (this.#hasWon) {
+            return;
+        }
+
+        /* Check if the nonogram is solved */
+        const curState = this.#extractSolverState();
+        if (!isSolved(curState)) {
+            return;
+        }
+
+        alert("Congratulations! You solved the puzzle in " + this.#timer.getElapsedTimeAsString());
+        this.#hasWon = true;
+        this.#timer.paused = true;
     }
 
     /**

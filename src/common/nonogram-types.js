@@ -212,6 +212,18 @@ export class NonogramState {
     }
 
     /**
+     * Returns the hints for the given line id.
+     * 
+     * @param {LineId} lineId 
+     * @returns {Array<number>}
+     */
+    getLineHints(lineId) {
+        return lineId.lineType == LineType.ROW ?
+            this.rowHints[lineId.index] :
+            this.colHints[lineId.index];
+    }
+
+    /**
      * Returns the knowledge of the cell at the given location.
      * 
      * @param {number} x 
@@ -231,6 +243,18 @@ export class NonogramState {
      */
     updateCell(x, y, knowledge) {
         this.#cells[x + y * this.#width] = knowledge;
+    }
+
+    /**
+     * Returns the line knowledge for the requested line.
+     * 
+     * @param {LineId} lineId 
+     * @returns {LineKnowledge}
+     */
+    getLineKnowledge(lineId) {
+        return lineId.lineType == LineType.ROW ?
+            this.getRowKnowledge(lineId.index) :
+            this.getColKnowledge(lineId.index);
     }
 
     /**

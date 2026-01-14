@@ -3,6 +3,47 @@ import { CellKnowledge, DeductionStatus, FullDeductionResult, LineId, LineKnowle
 const PRINT_XML = false;
 const TIMEOUT_SECS = 5;
 
+
+/**
+ * Checks if the given state is solved.
+ * 
+ * @param {NonogramState} state
+ * @returns {boolean} 
+ */
+export function isSolved(state) {
+    /* Each row and hint must be solved, then the board is solved */
+    const lines = [];
+    for (let x = 0; x < state.width; x++) {
+        lines.push(LineId.column(x));
+    }
+
+    for (let y = 0; y < state.height; y++) {
+        lines.push(LineId.row(y));
+    }
+
+    return !lines.map(lineId => isLineSolved(state, lineId)).some(res => res == false);
+}
+
+/**
+ * Returns true if the given line is solved in the given state.
+ * 
+ * @param {NonogramState} state 
+ * @param {LineId} lineId
+ * @returns {boolean} 
+ */
+function isLineSolved(state, lineId) {
+    const lineKnowledge = state.getLineKnowledge(lineId);
+
+    /* Each cell must be filled */
+    if (lineKnowledge.cells.some(x => x == CellKnowledge.UNKNOWN)) {
+        return false;
+    }
+
+    /* Line must be solveable */
+    const hints = state.getLineHints(lineId);
+    return leftmostSolution(lineKnowledge, hints) !== undefined;
+}
+
 /**
  * Performs a fullsolve.
  * 
@@ -298,9 +339,7 @@ function deduceLine(state, job) {
     const lineId = job.lineId;
     const mode = job.mode;
 
-    const curKnowledge = (lineId.lineType == LineType.ROW) ?
-        state.getRowKnowledge(lineId.index) :
-        state.getColKnowledge(lineId.index);
+    const curKnowledge = state.getLineKnowledge(lineId);
 
     const hints = (lineId.lineType == LineType.ROW) ?
         state.rowHints[lineId.index] :
