@@ -1,3 +1,5 @@
+var cached = /** @type {JoinedFiletype | undefined} */ (undefined);
+
 class JoinedFiletype {
     /** @type {Array<SerializedNonogram>} */
     nonograms = [];
@@ -16,15 +18,24 @@ export class SerializedNonogram {
     }
 };
 
+export function invalidateCache() {
+    cached = undefined;
+}
+
 /**
  * Fetches all stored nonograms and returns them.
  * 
  * @returns {Promise<Array<SerializedNonogram>>}
  */
 export async function loadNonograms() {
+    if (cached) {
+        return cached.nonograms;
+    }
+
     const serialized = await fetch("/nonograms/joined.json");
     const joined = /** @type {JoinedFiletype} */ (JSON.parse(await serialized.text()));
     normalizeNonograms(joined);
+    cached = joined;
     return joined.nonograms;
 }
 

@@ -1,7 +1,8 @@
 import { CellKnowledge } from "./common/nonogram-types.js";
 
 /* Storage is versioned if there are breaking changes to storage layout */
-const STORAGE_KEY = "storage_v0.03"
+export const STORAGE_KEY = "storage";
+export const STORAGE_VERSION = "V0.04";
 
 /**
  * Retrieves the stored state for the given nonogram, if any.
@@ -45,15 +46,18 @@ export function storeState(nonogramId, state) {
 }
 
 
-class StorageContent {
+export class StorageContent {
+    /** @type {number} */
+    versionKey = 1;
+
     /** @type {Array<StorageEntry>} */
     entries = [];
 };
 
-class StorageEntry {
+export class StorageEntry {
     /**
      * @param {string} nonogramId 
-     * @param {SaveState} state 
+     * @param {SaveState} state
      */
     constructor (nonogramId, state) {
         this.nonogramId = nonogramId;
@@ -64,9 +68,11 @@ class StorageEntry {
 export class SaveState {
     /**
      * @param {Array<CellKnowledge>} cells 
+     * @param {number} elapsed
      */
-    constructor(cells) {
+    constructor(cells, elapsed) {
         this.cells = cells;
+        this.elapsed = elapsed;
     }
 }
 
@@ -75,7 +81,7 @@ export class SaveState {
  * 
  * @returns {StorageContent}
  */
-function fetchStorage() {
+export function fetchStorage() {
     const serialized = window.localStorage.getItem(STORAGE_KEY);
     if (!serialized) {
         return new StorageContent();
@@ -89,7 +95,7 @@ function fetchStorage() {
  * 
  * @param {StorageContent} storage 
  */
-function putStorage(storage) {
+export function putStorage(storage) {
     const serialized = JSON.stringify(storage);
     window.localStorage.setItem(STORAGE_KEY, serialized);
 }

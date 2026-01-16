@@ -6,8 +6,8 @@ export class Timer {
 
     #view = /** @type {HTMLElement | null} */ (null);
 
-    #startTimestamp = 0;
     #curElapsed = 0;
+    #lastTs = 0;
 
     #paused = false;
 
@@ -32,19 +32,17 @@ export class Timer {
         this.#updateDisplayedTime();
 
         /* Start animation for timer */
-        const anim = () => {
-            if (this.#paused) {
+        const anim = (/** @type {number} */ ts) => {
+            if (this.#paused || this.#lastTs == 0) {
+                this.#lastTs = ts;
                 requestAnimationFrame(anim);
                 return;
             }
 
-            const elapsed = Math.floor((Date.now() - this.#startTimestamp) / 1000);
-            if (elapsed == this.#curElapsed) {
-                requestAnimationFrame(anim);
-                return;
-            }
+            const elapsed = ts - this.#lastTs;
+            this.#curElapsed += elapsed / 1000;
 
-            this.#curElapsed = elapsed;
+            this.#lastTs = ts;
             this.#updateDisplayedTime();
             requestAnimationFrame(anim);
         };
@@ -66,8 +64,13 @@ export class Timer {
      * 
      * @returns {number}
      */
-    getCurrentElapsedTime() {
+    get elapsed() {
         return this.#curElapsed;
+    }
+
+    set elapsed(val) {
+        this.#curElapsed = val;
+        this.#updateDisplayedTime();
     }
 
     /**
@@ -103,7 +106,6 @@ export class Timer {
      * @param {number} startElapsed
      */
     restart(startElapsed = 0) {
-        this.#startTimestamp = Date.now() - startElapsed * 1000;
         this.#curElapsed = startElapsed;
         this.#updateDisplayedTime();
     }

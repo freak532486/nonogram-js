@@ -147,7 +147,7 @@ export class PlayfieldComponent {
             ));
 
             this.#nonogramBoard.applyState(emptyState);
-            storage.storeState(nonogramId, new storage.SaveState(emptyState.cells));
+            storage.storeState(nonogramId, new storage.SaveState(emptyState.cells, 0));
             this.#stateHistory = [emptyState];
             this.#activeStateIdx = 0;
             this.controlPad.getButton(ControlPadButton.UNDO).style.visibility = "hidden";
@@ -179,6 +179,7 @@ export class PlayfieldComponent {
                 Array(this.#nonogramBoard.width).fill(null).map(() => []),
                 []
             ));
+            this.#timer.elapsed = storedState.elapsed;
         }
 
         /* Prepare history */
@@ -191,6 +192,14 @@ export class PlayfieldComponent {
 
     /** Should be called after removing the playfield from the screen */
     destroy() {
+        /* Store latest timer */
+        const state = storage.retrieveStoredState(this.#nonogramId);
+        if (state) {
+            state.elapsed = this.#timer.elapsed;
+            storage.storeState(this.#nonogramId, state);
+        }
+
+        /* Remove all menu entries related to playfield from menu */
         this.#menu.removeElement("playfield");
     }
 
@@ -437,8 +446,6 @@ export class PlayfieldComponent {
         const activeState = [...this.#nonogramBoard.getFullState().cells];
 
         return new NonogramState(
-            this.#nonogramBoard.width,
-            this.#nonogramBoard.height,
             this.#nonogramBoard.rowHints,
             this.#nonogramBoard.colHints,
             activeState
@@ -456,7 +463,7 @@ export class PlayfieldComponent {
             return; // Nothing to do
         }
 
-        storage.storeState(this.#nonogramId, new storage.SaveState(curState.cells));
+        storage.storeState(this.#nonogramId, new storage.SaveState(curState.cells, this.#timer.elapsed));
 
         const undoButton = this.controlPad.getButton(ControlPadButton.UNDO);
         const redoButton = this.controlPad.getButton(ControlPadButton.REDO);
