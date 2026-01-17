@@ -3,7 +3,8 @@ import { Catalog } from "./catalog/component/catalog.component";
 import { Header } from "./header/header.component";
 import { Menu } from "./menu/menu.component";
 import { PlayfieldComponent } from "./playfield/playfield.component";
-import { StartPage } from "./start-page/start-page.component";
+import { StartPage } from "./start-page/component/start-page.component";
+import { StartPageNonogramSelector } from "./start-page/internal/start-page-nonogram-selector";
 
 /**
  * Initializes the application.
@@ -42,9 +43,11 @@ const contentRoot = /** @type {HTMLElement} */ (document.getElementById("content
 const headerDiv = /** @type {HTMLElement} */ (document.getElementById("header-div"));
 const mainDiv = /** @type {HTMLElement} */ (document.getElementById("main-div"));
 
+let startPageNonogramSelector = new StartPageNonogramSelector();
+
 let menu = new Menu();
 let catalog = new Catalog();
-let startPage = new StartPage();
+let startPage = new StartPage(startPageNonogramSelector);
 let playfield = /** @type {PlayfieldComponent | undefined} */ (undefined);
 
 /* If undefined, that means the catalog is open */
@@ -54,6 +57,8 @@ async function _init() {
     await menu.init(contentRoot);
     await new Header(menu).init(headerDiv);
     await startPage.init(mainDiv);
+
+    startPage.onLogin = () => window.alert("Login dialog opened");
 
     catalog.onNonogramSelected = openNonogram;
 }
