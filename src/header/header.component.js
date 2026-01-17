@@ -11,6 +11,9 @@ export class Header {
     /** @type {Menu} */
     #menu;
 
+    /** @type {() => void} */
+    #onLogoClicked = () => {};
+
     /**
      * @param {Menu} menu 
      */
@@ -28,6 +31,10 @@ export class Header {
         this.#view = await loadHtml(header);
         parent.appendChild(this.view);
 
+        /* Logo click */
+        const imgLogo = /** @type {HTMLElement} */ (this.#view.querySelector("#logo"));
+        imgLogo.onclick = () => this.#onLogoClicked();
+
         /* Menu toggle */
         const btnMenu = /** @type {HTMLElement} */ (this.view.querySelector(".button.menu"));
         btnMenu.onclick = () => {
@@ -41,6 +48,15 @@ export class Header {
         }
 
         return this.#view;
+    }
+
+    /**
+     * Sets the callback for when the logo image is clicked.
+     * 
+     * @param {() => void} fn 
+     */
+    set onLogoClicked(fn) {
+        this.#onLogoClicked = fn;
     }
 
 }

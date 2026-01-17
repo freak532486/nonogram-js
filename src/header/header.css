@@ -17,7 +17,12 @@
 #header .logo {
     height: 100%;
     padding: 10px;
-    box-sizing: border-box
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+#header .logo:active {
+    background-color: #00000020;
 }
 
 #header .menu {

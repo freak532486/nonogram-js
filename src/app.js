@@ -28,6 +28,7 @@ const catalogAccess = new CatalogAccess();
 const startPageNonogramSelector = new StartPageNonogramSelector(catalogAccess);
 
 let menu = new Menu();
+let header = new Header(menu);
 let catalog = new Catalog(catalogAccess);
 let startPage = new StartPage(startPageNonogramSelector, catalogAccess);
 let playfield = /** @type {PlayfieldComponent | undefined} */ (undefined);
@@ -42,7 +43,9 @@ async function _init() {
     });
 
     await menu.init(contentRoot);
-    await new Header(menu).init(headerDiv);
+    await header.init(headerDiv);
+
+    header.onLogoClicked = openStartPage;
 
     startPage.onNonogramSelected = nonogramId => openNonogram(nonogramId);
     startPage.onLogin = () => window.alert("Login dialog opened");
