@@ -1,4 +1,7 @@
-export class TwoWayMap<K, V> {
+/**
+ * A two way map that supports fetching a value for a key _and_ a key for a value in O(1).
+ */
+export default class TwoWayMap<K, V> {
 
     #keyToValue: Map<K, V> = new Map();
     #valueToKey: Map<V, K> = new Map();

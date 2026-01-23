@@ -1,19 +1,27 @@
 import * as bcrypt from "bcrypt"
+import * as crypto from "crypto"
+import BasicAuthContent from "../types/basic-auth-content";
 
-const NUM_HASH_ROUNDS = 10;
+const BCRYPT_NUM_HASH_ROUNDS = 10;
+const TOKEN_LENGTH = 32;
 
-export interface BasicAuthContent {
-    username: string;
-    password: string;
-};
+
+/**
+ * Generates a random session- or refresh-token.
+ */
+export function generateRandomToken() {
+    return crypto.randomBytes(TOKEN_LENGTH).toString("hex");
+}
+
 
 /**
  * Creates a password hash. The hash is salted using the username.
  */
 export async function createPasswordHash(password: string)
 {
-    await bcrypt.hash(password, NUM_HASH_ROUNDS);
+    await bcrypt.hash(password, BCRYPT_NUM_HASH_ROUNDS);
 }
+
 
 /**
  * Compares if the stored hash matches the given password.
@@ -22,6 +30,10 @@ export async function validatePassword(password: string, storedHash: string) {
     return await bcrypt.compare(password, storedHash);
 }
 
+
+/**
+ * Parses a basic auth header. Returns 'undefined' if the header is not a proper basic auth header.
+ */
 export function parseBasicAuthHeader(header: string): BasicAuthContent | undefined {
     /* Input format: 'Basic <base64(username:password)>' */
     const outerSplit = header

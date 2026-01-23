@@ -1,9 +1,7 @@
 import "source-map-support/register";
-import * as global from "../global.js"
 import { join } from 'node:path'
 import AutoLoad, { AutoloadPluginOptions } from '@fastify/autoload'
 import { FastifyPluginAsync, FastifyServerOptions } from 'fastify'
-import { DatabaseMigrator } from "../database/database-migrator.js";
 
 export interface AppOptions extends FastifyServerOptions, Partial<AutoloadPluginOptions> {
 
@@ -16,13 +14,6 @@ const app: FastifyPluginAsync<AppOptions> = async (
   fastify,
   opts
 ): Promise<void> => {
-  /* Initialize services */
-  await global.init(fastify);
-
-  /* Perform database migrations */
-  const migrator = new DatabaseMigrator(fastify.log, global.getServices().databaseAccess);
-  await migrator.performMigrations();
-
   // Do not touch the following lines
 
   // This loads all plugins defined in plugins
@@ -41,6 +32,9 @@ const app: FastifyPluginAsync<AppOptions> = async (
     dir: join(__dirname, 'routes'),
     options: opts
   })
+
+  /* Perform database migrations */
+  
 }
 
 export default app

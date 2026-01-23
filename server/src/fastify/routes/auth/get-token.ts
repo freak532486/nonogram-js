@@ -1,5 +1,5 @@
-import * as global from "../../../global";
 import { FastifyPluginAsync } from 'fastify'
+import performLogin from "../../../auth/access/login"
 
 const getToken: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     fastify.get('/token', async function (request, reply) {
@@ -8,7 +8,12 @@ const getToken: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
             throw fastify.httpErrors.unauthorized("Missing authorization header.");
         }
 
-        return await global.getServices().loginService.performLogin(auth);
+        const tokens = await performLogin(fastify, auth);
+        if (!tokens) {
+            throw fastify.httpErrors.unauthorized("Bad credentials");
+        }
+
+        return tokens;
     });
 }
 
