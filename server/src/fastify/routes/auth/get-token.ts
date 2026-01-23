@@ -1,15 +1,14 @@
-import { GetTokenResponse } from "nonojs-common";
+import * as global from "../../../global";
 import { FastifyPluginAsync } from 'fastify'
 
 const getToken: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     fastify.get('/token', async function (request, reply) {
-        
-        fastify.log.info("Login endpoint was called. Or was it? Probably not.");
-        const response: GetTokenResponse = {
-            "sessionToken": "abc",
-            "refreshToken": "def"
+        const auth = request.headers.authorization;
+        if (!auth) {
+            throw fastify.httpErrors.unauthorized("Missing authorization header.");
         }
-        return response;
+
+        return await global.getServices().loginService.performLogin(auth);
     });
 }
 

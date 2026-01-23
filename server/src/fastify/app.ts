@@ -17,7 +17,7 @@ const app: FastifyPluginAsync<AppOptions> = async (
   opts
 ): Promise<void> => {
   /* Initialize services */
-  await global.init(fastify.log);
+  await global.init(fastify);
 
   /* Perform database migrations */
   const migrator = new DatabaseMigrator(fastify.log, global.getServices().databaseAccess);
