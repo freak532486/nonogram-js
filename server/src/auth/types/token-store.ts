@@ -50,8 +50,8 @@ export default class TokenStore {
     /**
      * Updates the session token of the given user.
      */
-    putSessionToken(userId: number, token: string) {
+    putSessionToken(userId: number, token: string, creationTimestamp: number) {
         this.#store.set(userId, token);
-        this.#creationTimestamps.set(token, Date.now());
+        this.#creationTimestamps.set(token, creationTimestamp);
     }
 }

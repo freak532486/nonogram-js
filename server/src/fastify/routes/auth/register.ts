@@ -1,5 +1,4 @@
 import { FastifyPluginAsync } from 'fastify'
-import auth from "../../../auth/auth"
 import { RegisterUserRequest, RegisterUserRequestSchema } from 'nonojs-common';
 
 const register: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
@@ -15,7 +14,7 @@ const register: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
             /* Parse auth header */
             const username = request.body.username;
             const password = request.body.password;
-            const userId = await auth.registerUser(fastify, username, password);
+            const userId = await fastify.state.authService.registerUser(username, password);
 
             if (!userId) {
                 throw fastify.httpErrors.conflict("User already exists");

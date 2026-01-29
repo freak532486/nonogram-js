@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
-import auth from "../../../auth/auth"
+import * as auth from "../../../auth/auth"
 import { GetTokenResponse, GetTokenResponseSchema } from 'nonojs-common';
 
 const refreshSession: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
@@ -24,7 +24,7 @@ const refreshSession: FastifyPluginAsync = async (fastify, opts): Promise<void> 
                 throw fastify.httpErrors.unauthorized("Bad bearer");
             }
 
-            const tokens = await auth.refreshSession(fastify, refreshToken);
+            const tokens = await fastify.state.authService.refreshSession(refreshToken);
             if (!tokens) {
                 throw fastify.httpErrors.unauthorized("Bad bearer");
             }

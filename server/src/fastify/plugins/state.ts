@@ -1,9 +1,9 @@
 import fp from "fastify-plugin";
 import { Database } from "sqlite";
 import openDatabase from "../../db/impl/database-init";
-import TokenStore from "../../auth/types/token-store";
 import Config from "../../config/types/config";
 import config from "../../config/config"
+import * as auth from "../../auth/auth"
 
 const CONFIG_PATH = "nonojs-server-settings.json";
 const CONFIG_KEY_DATABASE_PATH = "databasePath";
@@ -11,7 +11,7 @@ const CONFIG_KEY_DATABASE_PATH = "databasePath";
 export interface AppState {
     config: Config;
     db: Database;
-    tokenStore: TokenStore;
+    authService: auth.AuthService;
 }
 
 export default fp(async (fastify) => {
@@ -30,13 +30,12 @@ export default fp(async (fastify) => {
     /* Open database connection */
     const db = await openDatabase(fastify, dbPath);
 
-    /* Create token store for session tokens */
-    const tokenStore = new TokenStore();
+    const authService = new auth.AuthService(fastify);
 
     /* Decore and add to state */
     fastify.decorate("state", {
         config,
         db,
-        tokenStore
+        authService
     } satisfies AppState);
 });
