@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
-import * as auth from "../../../auth/auth"
+import * as auth from "../../../../auth/auth"
 import { GetTokenResponse, GetTokenResponseSchema } from 'nonojs-common';
 
 const login: FastifyPluginAsync = async (fastify, opts): Promise<void> => {

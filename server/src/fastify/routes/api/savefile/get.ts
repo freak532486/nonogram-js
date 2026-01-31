@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
-import * as auth from '../../../auth/auth';
+import * as auth from '../../../../auth/auth';
 import { SaveFile, SaveFileSchema } from 'nonojs-common';
-import savefile from '../../../savefile/savefile';
+import savefile from '../../../../savefile/savefile';
 
 const get: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     fastify.route<{
