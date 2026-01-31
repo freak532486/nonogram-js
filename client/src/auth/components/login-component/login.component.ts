@@ -5,17 +5,18 @@ import "../../../common/styles/boxes.css"
 
 export default class LoginComponent {
 
-    #view: HTMLElement | undefined;
+    #view: HTMLElement;
 
     constructor(
         private readonly onLogin: (username: string, password: string) => Promise<void>,
         private readonly onRegister: (username: string, password: string) => Promise<void>
-    ) {}
+    ) {
+        this.#view = htmlToElement(loginTemplate);
+    }
 
     async init(parent: HTMLElement): Promise<void>
     {
-        /* Create view, attach it to parent */
-        this.#view = htmlToElement(loginTemplate);
+        /* Attach view to parent */
         parent.appendChild(this.#view);
 
         /* Fetch all relevant elements */
@@ -67,6 +68,26 @@ export default class LoginComponent {
 
     async destroy() {
         this.#view?.remove();
+    }
+
+    set loginMessage(msg: string) {
+        const labelLogin = this.#view.querySelector("#label-login-message") as HTMLElement;
+        labelLogin.textContent = msg;
+    }
+
+    set loginMessageColor(color: string) {
+        const labelLogin = this.#view.querySelector("#label-login-message") as HTMLElement;
+        labelLogin.style.color = color;
+    }
+
+    set registerMessage(msg: string) {
+        const labelRegister = this.#view.querySelector("#label-register-message") as HTMLElement;
+        labelRegister.textContent = msg;
+    }
+
+    set registerMessageColor(color: string) {
+        const labelRegister = this.#view.querySelector("#label-register-message") as HTMLElement;
+        labelRegister.style.color = color;
     }
 
 }

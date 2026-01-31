@@ -8,8 +8,8 @@
   },
   "scripts": {
     "test": "npm run build && tsc -p test/tsconfig.json && c8 node --test -r ts-node/register \"test/**/*.ts\"",
-    "start": "npm run build && fastify start -p 9001 -l info dist/fastify/app.js | pino-pretty",
-    "debug": "npm run build && fastify start -p 9001 -d -l info dist/fastify/app.js",
+    "start": "npm run build && fastify start -p 3000 -l info dist/fastify/app.js | pino-pretty",
+    "debug": "npm run build && fastify start -p 3000 -d -l info dist/fastify/app.js",
     "build": "tsc",
     "dev": "tsc -w"
   },

@@ -3,24 +3,22 @@ import { performRequest } from "../../api/api";
 
 export default class AuthService {
 
-    constructor (
-        private readonly onLoginRequired: () => Promise<void>,
-        private readonly onUnexpectedResponse: (response: Response) => Promise<void>,
-        private readonly onError: (error: any) => Promise<void>
-    ) {}
-
     /**
      * Registers a new user with the given username and password.
      */
-    async register(username: string, password: string): Promise<"ok" | "user_exists" | "error">
+    async register(username: string, password: string): Promise<
+        { status: "ok", data: undefined } | 
+        { status: "user_exists", data: undefined } | 
+        { status: "error", data: any }
+    >
     {
         const body: RegisterUserRequest = {
             username: username,
             password: password
         };
 
-        const request = new Request("/auth/register", {
-            method: "PUT",
+        const request = new Request("/api/auth/register", {
+            method: "POST",
             body: JSON.stringify(body)
         });
 
@@ -31,21 +29,19 @@ export default class AuthService {
         }
 
         if (response.status == "error") {
-            await this.onError(response.data);
-            return "error";
+            return { status: "error", data: response.data };
         }
 
         if (response.status == "ok") {
-            return "ok";
+            return { status: "ok", data: undefined };
         }
 
         /* Check if the bad response is a 409 Conflict. In that case, the user already exists */
         if (response.data.status == 409) {
-            return "user_exists";
+            return { status: "user_exists", data: undefined };
         }
 
-        await this.onUnexpectedResponse(response.data);
-        return "error";
+        return { status: "error", data: response };
     }
 
 }

@@ -34,18 +34,32 @@ let menu = new Menu();
 let header = new Header(menu);
 let catalog = new Catalog(catalogAccess);
 let startPage = new StartPage(startPageNonogramSelector, catalogAccess);
-let authService = new AuthService(async () => {}, async () => {}, async () => {});
+let authService = new AuthService();
+
 let loginPage = new LoginComponent(
     async (username, password) => {},
     async (username, password) => {
         const result = await authService.register(username, password);
-        switch (result) {
-            case "ok": alert("User created"); break;
-            case "user_exists": alert("User already exists."); break;
-            case "error": alert("An error occured."); break;
+        switch (result.status) {
+            case "ok":
+                loginPage.registerMessage = "User created successfully.";
+                loginPage.registerMessageColor = "#00FF33";
+                break;
+
+            case "user_exists":
+                loginPage.registerMessage = "User already exists.";
+                loginPage.registerMessageColor = "#FF0000";
+                break;
+
+            case "error":
+                loginPage.registerMessage = "An error occured. Details can be found in the logs.";
+                loginPage.registerMessageColor = "#FF0000";
+                console.error("An error occured during registration.", result.data);
+                break;
         }
     }
 );
+
 let playfield = /** @type {PlayfieldComponent | undefined} */ (undefined);
 
 /* If undefined, that means the catalog is open */
