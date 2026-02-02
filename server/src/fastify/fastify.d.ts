@@ -3,6 +3,7 @@ import { Config } from "../config/impl/config-access";
 import { Database } from "sqlite";
 import TokenStore from "../auth/types/token-store";
 import { AuthService } from "../auth/auth";
+import Mailjet from "node-mailjet";
 
 declare module "fastify" {
     interface FastifyInstance {
@@ -10,6 +11,7 @@ declare module "fastify" {
             config: Config;
             db: Database;
             authService: AuthService;
+            mailjet: Mailjet;
         };
     }
 }

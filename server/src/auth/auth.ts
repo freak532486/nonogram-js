@@ -1,20 +1,17 @@
 import { FastifyInstance } from "fastify";
 import * as headerParsing from "./impl/header-parsing";
 import TokenStore from "./types/token-store";
-import DatabaseAccess from "../access/database-access";
-import database from "../db/database";
-import AuthDto from "./impl/auth-dto";
 import LoginService from "./impl/login-service";
 import BasicAuthContent from "./types/basic-auth-content";
 import TokenPair from "./types/token-pair";
 import SessionRefreshService from "./impl/session-refresh-service";
 import RegisterService from "./impl/register-service";
-import UserEntry from "./types/user-entry";
+import { createUser, getUserById, getUserByUsername, getUserForRefreshToken, putRefreshToken } from "./impl/auth-sql";
+import { performUnconfirmedRegistration } from "./impl/register";
 
 export class AuthService {
 
     #tokenStore;
-    #authDto;
     #sessionRefreshService;
     #loginService;
     #registerService;
@@ -23,28 +20,20 @@ export class AuthService {
         /* Create in-memory store for session tokens */
         this.#tokenStore = new TokenStore();
 
-        /* Create database service */
-        const databaseAccess: DatabaseAccess = {
-            runSql: (sql, params) => database.runSql(fastify.state.db, sql, params),
-            performInTransaction: (fn) => database.performInTransaction(fastify.state.db, fn)
-        };
-
         /* Create services */
-        this.#authDto = new AuthDto(databaseAccess);
-
         this.#sessionRefreshService = new SessionRefreshService(
             async (userId, sessionToken, creationTime) => this.#tokenStore.putSessionToken(userId, sessionToken, creationTime),
-            (userId, refreshToken, creationTime) => this.#authDto.putRefreshToken(userId, refreshToken, creationTime),
-            (refreshToken) => this.#authDto.getUserForRefreshToken(refreshToken)
+            (userId, refreshToken, creationTime) => putRefreshToken(fastify, userId, refreshToken, creationTime),
+            (refreshToken) => getUserForRefreshToken(fastify, refreshToken)
         );
 
         this.#loginService = new LoginService(
-            (username) => this.#authDto.getUserByUsername(username),
+            (username) => getUserByUsername(fastify, username),
             (userId) => this.#sessionRefreshService.refreshTokenForUser(userId)
         );
 
         this.#registerService = new RegisterService(
-            (username, passwordHash) => this.#authDto.createUser(username, passwordHash)
+            (username, passwordHash, emailAddress) => createUser(fastify, username, passwordHash, emailAddress)
         );
     }
 
@@ -60,8 +49,8 @@ export class AuthService {
      * Registers a new user with the given username and password. Returns the created user id if this succeeds, or
      * undefined if it doesn't (most likely due to the user already existing).
      */
-    async registerUser(username: string, password: string): Promise<number | undefined> {
-        return this.#registerService.registerUser(username, password);
+    async registerUser(username: string, password: string, emailAddress: string): Promise<number | undefined> {
+        return this.#registerService.registerUser(username, password, emailAddress);
     }
 
     async refreshSession(refreshToken: string): Promise<TokenPair | undefined> {
@@ -76,17 +65,15 @@ export class AuthService {
         return this.#tokenStore.getUserId(sessionToken);
     }
 
-
-    async getUserForUserId(userId: number): Promise<UserEntry | undefined> {
-        return this.#authDto.getUserById(userId);
-    }
-
 }
 
-export function parseBasicAuthHeader(header: string): BasicAuthContent | undefined {
-    return headerParsing.parseBasicAuthHeader(header);
+const auth = {
+    parseBasicAuthHeader: headerParsing.parseBasicAuthHeader,
+    parseBearerAuthHeader: headerParsing.parseBearerAuthHeader,
+
+    getUserById: getUserById,
+
+    performUnconfirmedRegistration: performUnconfirmedRegistration
 }
 
-export function parseBearerAuthHeader(header: string): string | undefined {
-    return headerParsing.parseBearerAuthHeader(header);
-}
+export default auth;
