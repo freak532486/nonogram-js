@@ -1,5 +1,4 @@
-import * as storage from "../storage.js"
-import { CellKnowledge, DeductionStatus, LineId, LineKnowledge, LineType, NonogramState, SingleDeductionResult } from "../common/nonogram-types.js";
+import { CellKnowledge, DeductionStatus, LineId, LineKnowledge, LineType, NonogramState } from "../common/nonogram-types.js";
 import { Point } from "../common/point.js";
 import { htmlToElement } from "../loader.js";
 import { Menu } from "../menu/menu.component.js";
@@ -8,7 +7,6 @@ import { ControlPad, ControlPadButton } from "./control-pad/control-pad.componen
 import { MessageBox } from "./message-box/message-box.component.js";
 import { BoardComponentFullState, NonogramBoardComponent } from "./nonogram-board/nonogram-board.component.js";
 import { ZoomWindow } from "./zoom-window/zoom-window.component.js";
-
 import playfield from "./playfield.html"
 import "./playfield.css"
 import { LineIdSet } from "../common/line-id-set.js";
@@ -34,11 +32,20 @@ export class PlayfieldComponent {
     #hasWon: boolean = false;
 
     #onExit: () => void = () => {};
+    #onStateChanged: () => void = () => {};
 
     /**
      * Constructs a playfield for the given nonogram. Call init() before using!
      */
-    constructor (nonogramId: string, rowHints: Array<Array<number>>, colHints: Array<Array<number>>, menu: Menu) {
+    constructor (
+        nonogramId: string,
+        rowHints: Array<Array<number>>,
+        colHints: Array<Array<number>>,
+        menu: Menu,
+        initialState: Array<number> | undefined,
+        initialElapsedTime: number | undefined
+    )
+    {
         this.#nonogramId = nonogramId;
         this.#nonogramBoard = new NonogramBoardComponent(rowHints, colHints);
         this.#menu = menu;
@@ -133,10 +140,6 @@ export class PlayfieldComponent {
             ));
 
             this.#nonogramBoard.applyState(emptyState);
-            storage.storeState(nonogramId, {
-                cells: emptyState.cells,
-                elapsed: 0
-            });
             this.#stateHistory = [emptyState];
             this.#activeStateIdx = 0;
             this.controlPad.getButton(ControlPadButton.UNDO).style.visibility = "hidden";
@@ -144,6 +147,7 @@ export class PlayfieldComponent {
             this.#hasWon = false;
             this.#timer.paused = false;
             this.#timer.restart();
+            this.#onStateChanged();
         }
         menu.appendElement(resetButton);
 
@@ -160,15 +164,17 @@ export class PlayfieldComponent {
         menu.appendElement(exitButton);
 
         /* Apply stored state if exists */
-        const storedState = storage.retrieveStoredState(this.#nonogramId);
-        if (storedState) {
+        if (initialState) {
             this.#nonogramBoard.applyState(new BoardComponentFullState(
-                storedState.cells,
+                initialState,
                 Array(this.#nonogramBoard.height).fill(null).map(() => []),
                 Array(this.#nonogramBoard.width).fill(null).map(() => []),
                 []
             ));
-            this.#timer.elapsed = storedState.elapsed;
+        }
+
+        if (initialElapsedTime) {
+            this.#timer.elapsed = initialElapsedTime;
         }
 
         /* Prepare history */
@@ -177,25 +183,6 @@ export class PlayfieldComponent {
         /* Recheck hints */
         const emptyState = Array(this.#nonogramBoard.width * this.#nonogramBoard.height).fill(CellKnowledge.UNKNOWN);
         this.#recheckLineHints(emptyState, false); // No win message if board was already solved
-    }
-
-    /** Should be called after removing the playfield from the screen */
-    destroy() {
-        /* Remove from document */
-        if (this.#view) {
-            this.#view.remove();
-        }
-
-        /* Store latest timer */
-        const state = storage.retrieveStoredState(this.#nonogramId);
-        if (state) {
-            state.elapsed = this.#timer.elapsed;
-            storage.storeState(this.#nonogramId, state);
-            this.#updateLastPlayedNonogramId();
-        }
-
-        /* Remove all menu entries related to playfield from menu */
-        this.#menu.removeElement("playfield");
     }
 
     /**
@@ -450,11 +437,7 @@ export class PlayfieldComponent {
             return; // Nothing to do
         }
 
-        storage.storeState(this.#nonogramId, {
-            cells: curState.cells,
-            elapsed: this.#timer.elapsed
-        });
-        this.#updateLastPlayedNonogramId();
+        this.#onStateChanged();
 
         const undoButton = this.controlPad.getButton(ControlPadButton.UNDO);
         const redoButton = this.controlPad.getButton(ControlPadButton.REDO);
@@ -549,6 +532,10 @@ export class PlayfieldComponent {
         this.#nonogramBoard.applyLineKnowledge(lineId, deduction.newKnowledge);
     }
 
+    get nonogramId(): string {
+        return this.#nonogramId;
+    }
+
     get view(): HTMLElement {
         if (this.#view == null) {
             throw new Error("init() was not called");
@@ -565,23 +552,26 @@ export class PlayfieldComponent {
         return this.#controlPad;
     }
 
+    get currentState(): BoardComponentFullState {
+        return this.#nonogramBoard.getFullState();
+    }
+
+    get hasWon(): boolean {
+        return this.#hasWon;
+    }
+
+    /**
+     * Sets the callback that is called when the exit button is pressed.
+     */
     set onExit(fn: () => void) {
         this.#onExit = fn;
     }
 
     /**
-     * Updates the last played nonogram id 
+     * Sets the callback that is called when the state of the board changes.
      */
-    #updateLastPlayedNonogramId() {
-        const store = storage.fetchStorage();
-        
-        if (!this.#hasWon) {
-            store.lastPlayedNonogramId = this.#nonogramId;
-        } else if (store.lastPlayedNonogramId == this.#nonogramId) {
-            store.lastPlayedNonogramId = undefined;
-        }
-
-        storage.putStorage(store);
+    set onStateChanged(fn: () => void) {
+        this.#onStateChanged = fn;
     }
 
 };

@@ -11,6 +11,7 @@ import LoginComponent from "./auth/components/login-component/login.component"
 import AuthService from "./auth/services/auth-service"
 import tokenRepositoryInstance from "./auth/services/token-repository-instance"
 import ApiServiceImpl from "./api/api-service-impl"
+import * as storage from "./storage"
 import * as storageMigration from "./storage-migration"
 
 
@@ -169,16 +170,59 @@ export async function openNonogram(nonogramId) {
         return false;
     }
 
+    /* Load current state */
+    var stored = storage.retrieveStoredState(nonogramId);
+
     /* Create new playfield */
     activeComponent?.destroy();
-    playfield = new PlayfieldComponent(nonogramId, nonogram.rowHints, nonogram.colHints, menu);
+    playfield = new PlayfieldComponent(
+        nonogramId,
+        nonogram.rowHints, nonogram.colHints,
+        menu,
+        stored?.cells,
+        stored?.elapsed
+    );
+
     playfield.init(mainDiv);
     activeComponent = playfield;
 
-    playfield.onExit = () => navigateTo("/");
+    playfield.onExit = () => {
+        storePlayfieldStateToStorage(playfield);
+        navigateTo("/");
+    }
+
+    playfield.onStateChanged = () => {
+        storePlayfieldStateToStorage(playfield);
+
+        /* Update last played nonogram id */
+        const saveFile = storage.fetchStorage();
+
+        if (!playfield.hasWon) {
+            saveFile.lastPlayedNonogramId = playfield.nonogramId;
+        } else {
+            saveFile.lastPlayedNonogramId = undefined;
+        }
+
+        storage.putStorage(saveFile);
+    }
+
     openNonogramId = nonogramId;
     document.title = "Playing " + nonogram.colHints.length + "x" + nonogram.rowHints.length + " Nonogram"
     return true;
+}
+
+/**
+ * Stores the current state of the playfield to storage.
+ * 
+ * @param {PlayfieldComponent} playfield 
+ */
+function storePlayfieldStateToStorage(playfield) {
+    const curState = playfield.currentState;
+
+    storage.storeState(playfield.nonogramId, {
+        cells: curState.cells,
+        elapsed: playfield.elapsed
+    });
 }
 
 export function showNotFoundPage() {
