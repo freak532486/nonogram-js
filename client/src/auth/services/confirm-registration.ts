@@ -1,46 +1,51 @@
-import { ApiService } from "../../api/api-service";
 import * as app from "../../app"
+import RegistrationConfirmationComponent from "../components/registration-confirmation/registration-confirmation.component";
 
-/**
- * Given the confirmation token, confirms the registration and then redirects to the homepage.
- */
-export async function confirmRegistration(token: string): Promise<void>
+export default class RegistrationConfirmationManager
 {
-    const apiService = app.apiService;
+    constructor(
+        private readonly resetContentRoot: () => void,
+        private readonly contentRoot: HTMLElement
+    ) {}
 
-    /* Send confirmation request to server */
-    const request = new Request("/api/auth/confirm-registration?token=" + token, {
-        method: "GET",
-    });
-    const response = await apiService.performRequest(request);
+    async confirmRegistration(token: string): Promise<void>
+    {
+        const apiService = app.apiService;
 
-    /* Display a different text based on the response */
-    let displayedText = "";
+        /* Create display component */
+        const component = new RegistrationConfirmationComponent();
+        this.resetContentRoot();
+        component.init(this.contentRoot);
 
-    switch (response.status) {
-        case "ok":
-            displayedText = "Confirmation successful. You can now log in with your new username.";
-            break;
+        /* Send confirmation request to server */
+        const request = new Request("/api/auth/confirm-registration?token=" + token, {
+            method: "GET",
+        });
+        const response = await apiService.performRequest(request);
 
-        case "bad_response":
-            if (response.data.status == 404) {
-                displayedText = "Unknown registration token."
-            } else if (response.data.status == 409) {
-                displayedText = "Someone has registered your username while your confirmation was pending. Please choose a different username.";
-            } else {
-                displayedText = "An error occured.";
-            }
-            break;
+        switch (response.status) {
+            case "ok":
+                component.setTitle("Success");
+                component.setMessage("Confirmation successful. You can now log in with your new username.");
+                break;
 
-        case "unauthorized":
-        case "error":
-            displayedText = "An error occured";
-            break;
+            case "bad_response":
+                component.setTitle("Error");
+                if (response.data.status == 404) {
+                    component.setMessage("Unknown registration token.");
+                } else if (response.data.status == 409) {
+                    component.setMessage("Someone has registered your username while your confirmation was pending. Please choose a different username.");
+                } else {
+                    component.setMessage("An unknown error occured.");
+                }
+                break;
+
+            case "unauthorized":
+            case "error":
+                component.setTitle("Error");
+                component.setMessage("An error occured");
+                break;
+        }
     }
 
-    displayedText += "<br>Redirecting to homepage in five seconds...";
-    document.body.replaceChildren(document.createTextNode(displayedText));
-
-    /* Redirect */
-    setTimeout(() => app.navigateTo("/"), 5000);
 }

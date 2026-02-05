@@ -1,12 +1,10 @@
 import * as app from "./app"
-import { confirmRegistration } from "./auth/services/confirm-registration";
 
 export class Router
 {
 
     /**
      * Performs routing logic.
-     * 
      */
     async run() {
         const path = window.location.pathname;
@@ -23,7 +21,7 @@ export class Router
                 app.navigateTo("/");
             }
 
-            await confirmRegistration(token);
+            await app.registrationManager.confirmRegistration(token);
             return;
         }
         

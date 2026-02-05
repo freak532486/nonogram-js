@@ -86,7 +86,7 @@ export default class PlayfieldMenuButtonManager {
             return;
         }
 
-        this.menu.removeElement("playfield");
+        this.menu.removeElements("playfield");
     }
 
 };

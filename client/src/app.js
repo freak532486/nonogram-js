@@ -7,13 +7,14 @@ import { PlayfieldComponent } from "./playfield/playfield.component";
 import { Router } from "./router";
 import { StartPage } from "./start-page/component/start-page.component";
 import { StartPageNonogramSelector } from "./start-page/internal/start-page-nonogram-selector";
-import LoginComponent from "./auth/components/login-component/login.component"
+import LoginComponent from "./auth/components/login/login.component"
 import AuthService from "./auth/services/auth-service"
 import tokenRepositoryInstance from "./auth/services/token-repository-instance"
 import ApiServiceImpl from "./api/api-service-impl"
 import * as storage from "./storage"
 import * as storageMigration from "./storage-migration"
 import PlayfieldMenuButtonManager from "./playfield-menu-button-manager";
+import RegistrationConfirmationManager from "./auth/services/confirm-registration";
 
 
 const TITLE_STARTPAGE = "NonoJs · Free Nonogram Platform";
@@ -37,6 +38,10 @@ let header = new Header(menu);
 let catalog = new Catalog(catalogAccess);
 let startPage = new StartPage(startPageNonogramSelector, catalogAccess);
 export let apiService = new ApiServiceImpl(tokenRepositoryInstance);
+export let registrationManager = new RegistrationConfirmationManager(
+    () => mainDiv.replaceChildren(),
+    mainDiv
+);
 let authService = new AuthService(apiService, tokenRepositoryInstance);
 
 let loginPage = new LoginComponent(
@@ -45,8 +50,7 @@ let loginPage = new LoginComponent(
 
         switch (result.status) {
             case "ok":
-                loginPage.loginMessage = "Success. You are now logged in as '" + username + "'";
-                loginPage.loginMessageColor = "#3dc41c";
+                navigateTo("/");
                 break;
 
             case "bad_credentials":
@@ -66,7 +70,7 @@ let loginPage = new LoginComponent(
         const result = await authService.register(username, password, emailAddress);
         switch (result.status) {
             case "ok":
-                loginPage.registerMessage = "User created successfully.";
+                loginPage.registerMessage = "A confirmation E-Mail has been sent to your address.";
                 loginPage.registerMessageColor = "#3dc41c";
                 break;
 

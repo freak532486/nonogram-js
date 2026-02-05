@@ -71,11 +71,11 @@ export class Menu {
     }
 
     /**
-     * Removes an entry, based on its class name.
+     * Removes all entries of the given class.
      * 
      * @param {String} elementClass 
      */
-    removeElement(elementClass) {
+    removeElements(elementClass) {
         const entriesElem = /** @type {HTMLElement} */ (this.view.querySelector(".entries"));
         entriesElem.querySelectorAll("." + elementClass).forEach(x => x.remove());
     }
