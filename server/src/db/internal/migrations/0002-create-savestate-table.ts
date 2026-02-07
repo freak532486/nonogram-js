@@ -12,7 +12,7 @@ export default async function createSavestateTable(fastify: FastifyInstance): Pr
             user_id INTEGER PRIMARY KEY,
             save_file BLOB NOT NULL,
             timestamp INTEGER NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     `;
 

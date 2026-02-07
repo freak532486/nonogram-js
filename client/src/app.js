@@ -73,7 +73,10 @@ let settings = new Settings(
         mergeLocalSavefileWithAccount.perform();
         navigateTo("/");
     },
-    () => { /* TODO */ }
+    async () => {
+        await authService.deleteUser();
+        navigateTo("/");
+    }
 );
 
 let loginPage = new LoginComponent(
@@ -157,6 +160,7 @@ export async function init() {
     startPage.onNonogramSelected = nonogramId => navigateTo("/n/" + nonogramId);
     startPage.onLogin = () => navigateTo("/login");
     startPage.onOpenCatalog = () => navigateTo("/catalog");
+    startPage.onOpenSettings = () => navigateTo("/settings");
 
     catalog.onNonogramSelected = nonogramId => navigateTo("/n/" + nonogramId);
 

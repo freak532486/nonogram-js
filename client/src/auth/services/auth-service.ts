@@ -32,7 +32,10 @@ export default class AuthService {
 
         const request = new Request("/api/auth/register", {
             method: "POST",
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            headers: {
+                "Content-Type": "application/json"
+            }
         });
 
         const response = await this.apiService.performRequest(request);
@@ -143,6 +146,20 @@ export default class AuthService {
         }
 
         this.tokenRepository.clearTokens();
+    }
+
+    /**
+     * Removes the active user from the server.
+     */
+    async deleteUser()
+    {
+        const request = new Request("/api/auth/user", {
+            "method": "DELETE"
+        });
+        const response = await this.apiService.performRequestWithSessionToken(request);
+        if (response.status !== "ok") {
+            window.alert("An error occured. Your user could not be deleted.");
+        }
     }
 
 }

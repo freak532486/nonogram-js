@@ -19,6 +19,7 @@ export default async function openDatabase(fastify: FastifyInstance, dbPath: str
 
     /* Run initialization if database did not exist */
     if (databaseExists) {
+        enableForeignKeyConstraints(db);
         return db;
     }
 
@@ -26,6 +27,7 @@ export default async function openDatabase(fastify: FastifyInstance, dbPath: str
     try {
         fastify.log.info("Performing database initialization");
         await database.performInTransaction(db, () => runDatabaseInitialization(db));
+        enableForeignKeyConstraints(db);
         return db;
     } catch (error) {
         db.close();
@@ -35,10 +37,11 @@ export default async function openDatabase(fastify: FastifyInstance, dbPath: str
 }
 
 async function runDatabaseInitialization(db: sqlite.Database) {
-    /* Enable foreign key constraints */
-    await database.runSql(db, "PRAGMA foreign_keys = ON");
-
     /* Create migration script table */
     const migrationTableSql = "CREATE TABLE migration_history (id varchar(255), PRIMARY KEY (id));";
     await database.runSql(db, migrationTableSql);
+}
+
+async function enableForeignKeyConstraints(db: sqlite.Database) {
+    await database.runSql(db, "PRAGMA foreign_keys = ON");
 }

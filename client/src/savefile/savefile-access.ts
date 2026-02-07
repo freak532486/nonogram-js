@@ -84,7 +84,10 @@ export default class SavefileAccess
         const serialized = JSON.stringify(savefile);
         const request = new Request("/api/savefile", {
             "method": "PUT",
-            "body": serialized
+            "body": serialized,
+            "headers": {
+                "Content-Type": "application/json"
+            }
         });
         const response = await this.apiService.performRequestWithSessionToken(request);
 

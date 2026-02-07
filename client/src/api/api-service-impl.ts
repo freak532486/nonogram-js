@@ -14,9 +14,6 @@ export default class ApiServiceImpl implements ApiService {
     async performRequest(request: Request): Promise<RequestResult>
     {
         try {
-            /* Every request will be a json request */
-            request.headers.set("Content-Type", "application/json");
-
             const response = await fetch(request);
 
             if (response.status == 401) {
@@ -92,7 +89,6 @@ export default class ApiServiceImpl implements ApiService {
             const response = await this.performRequest(new Request("/api/auth/refresh-session", {
                 method: "GET",
                 headers: {
-                    "Content-Type": "application/json",
                     "Authorization": "Bearer " + refreshToken
                 }
             }));

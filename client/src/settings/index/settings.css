@@ -7,7 +7,6 @@
 #settings #entries {
     overflow: scroll;
     box-sizing: border-box;
-    border-top: 2px groove white;
 }
 
 #settings .settings-entry {

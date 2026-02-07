@@ -1,5 +1,5 @@
 import * as headerParsing from "./impl/header-parsing";
-import { getUserById } from "./impl/auth-sql";
+import { deleteUser, getUserById } from "./impl/auth-sql";
 import { confirmRegistration, performUnconfirmedRegistration } from "./impl/registration";
 import { getUserIdForSession } from "./internal/utils";
 import { performLogin } from "./impl/login";
@@ -18,7 +18,8 @@ const auth = {
     login: performLogin,
     logout: performLogout,
     performUnconfirmedRegistration: performUnconfirmedRegistration,
-    confirmRegistration: confirmRegistration
+    confirmRegistration: confirmRegistration,
+    deleteUser: deleteUser
 }
 
 export default auth;

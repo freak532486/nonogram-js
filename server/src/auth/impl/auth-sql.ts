@@ -193,3 +193,18 @@ export async function removeSession(
     const deleted = await database.runSql(fastify.state.db, removalSql, { $refreshToken: refreshToken });
     return deleted.length > 0;
 }
+
+export async function deleteUser(
+    fastify: FastifyInstance,
+    userId: number
+): Promise<boolean>
+{
+    const sql = `
+        DELETE FROM users
+        WHERE id = $userId
+        RETURNING id
+    `;
+
+    const result = await database.runSql(fastify.state.db, sql, { $userId: userId });
+    return result.length > 0;
+}

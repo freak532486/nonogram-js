@@ -25,7 +25,7 @@ export default async function authTableCreation(fastify: FastifyInstance) {
             refresh_token TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
             creation_timestamp INTEGER NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     `
 
