@@ -1,6 +1,7 @@
 import { SaveFile } from "nonojs-common";
 import { ApiService } from "../api/api-service";
 import { ACTIVE_VERSION_KEY } from "./savefile-migrator";
+import { CellKnowledge } from "../common/nonogram-types";
 
 const STORAGE_KEY = "storage";
 
@@ -37,6 +38,15 @@ export default class SavefileAccess
     }
 
     /**
+     * Removes the local savefile for the given user.
+     */
+    deleteLocalSavefileForUser(username: string | undefined)
+    {
+        const key = STORAGE_KEY + (username ? "_" + username : "");
+        window.localStorage.removeItem(key);
+    }
+
+    /**
      * Fetches the savefile for the currently logged-in user from the server.
      */
     async fetchServerSavefile(): Promise<SaveFile>
@@ -56,6 +66,8 @@ export default class SavefileAccess
      */
     writeLocalSavefile(savefile: SaveFile)
     {
+        removeEmptySavestates(savefile);
+
         const activeUsername = this.getActiveUsername();
         const key = STORAGE_KEY + (activeUsername ? "_" + activeUsername : "");
         const serialized = JSON.stringify(savefile);
@@ -67,6 +79,8 @@ export default class SavefileAccess
      */
     async writeServerSavefile(savefile: SaveFile)
     {
+        removeEmptySavestates(savefile);
+        
         const serialized = JSON.stringify(savefile);
         const request = new Request("/api/savefile", {
             "method": "PUT",
@@ -91,4 +105,9 @@ function createEmptySavefile(username: string | undefined): SaveFile
         lastPlayedNonogramId: undefined,
         entries: []
     };
+}
+
+function removeEmptySavestates(savefile: SaveFile)
+{
+    savefile.entries = savefile.entries.filter(entry => entry.state.cells.some(cell => cell !== CellKnowledge.UNKNOWN))
 }

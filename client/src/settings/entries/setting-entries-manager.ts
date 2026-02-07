@@ -10,6 +10,7 @@ export default class SettingEntriesManager
         private readonly settings: Settings,
         private readonly savefileAccess: SavefileAccess,
         private readonly getActiveUsername: () => string | undefined,
+        private readonly mergeLocalSavefileWithAccount: () => void,
         private readonly deleteActiveAccount: () => void
     ) {}
 
@@ -20,7 +21,7 @@ export default class SettingEntriesManager
         const localSavefile = this.savefileAccess.fetchLocalSavefileForUser(undefined);
 
         if (username && localSavefile) {
-            const mergeEntry = new SavefileMergeEntry(username, () => { /* TODO */ });
+            const mergeEntry = new SavefileMergeEntry(username, this.mergeLocalSavefileWithAccount);
             this.settings.addEntry(mergeEntry.view);
         }
 

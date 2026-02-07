@@ -12,11 +12,18 @@ export default class Settings
     constructor(
         savefileAccess: SavefileAccess,
         getActiveUsername: () => string | undefined,
+        mergeLocalSavefileWithAccount: () => void,
         deleteActiveAccount: () => void
     )
     {
         this.#view = htmlToElement(template);
-        this.#entriesManager = new SettingEntriesManager(this, savefileAccess, getActiveUsername, deleteActiveAccount);
+        this.#entriesManager = new SettingEntriesManager(
+            this,
+            savefileAccess,
+            getActiveUsername,
+            mergeLocalSavefileWithAccount,
+            deleteActiveAccount
+        );
     }
 
     init(parent: HTMLElement)

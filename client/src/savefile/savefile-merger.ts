@@ -46,7 +46,7 @@ export default class SavefileMerger
 
         /* Merge savefiles */
         const losingSavefile = mergeStrategy == MergeStrategy.LOCAL_WINS ? serverSavefile : localSavefile;
-        const winningSavefile = mergeStrategy == MergeStrategy.SERVER_WINS ? localSavefile : serverSavefile;
+        const winningSavefile = mergeStrategy == MergeStrategy.SERVER_WINS ? serverSavefile : localSavefile;
         return this.mergeSavefiles(losingSavefile, winningSavefile);
     }
 

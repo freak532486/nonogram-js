@@ -19,6 +19,8 @@ import SavefileAccess from "./savefile/savefile-access";
 import SavefileManager from "./savefile/savefile-manager";
 import { getSavestateForNonogram, putSavestate } from "./savefile/savefile-utils";
 import Settings from "./settings/index/settings.component";
+import MergeLocalSavefileWithAccount from "./savefile/merge-local-savefile-with-account";
+import SavefileMerger from "./savefile/savefile-merger";
 
 const AUTOSAVE_INTERVAL_MS = 5000;
 
@@ -46,6 +48,12 @@ const savefileMigrator = new SavefileMigrator(savefileAccess);
 /** @type {any} */
 let activeComponent = undefined;
 
+let mergeLocalSavefileWithAccount = new MergeLocalSavefileWithAccount(
+    savefileAccess,
+    new SavefileMerger(),
+    () => activeUsername
+);
+
 let notFoundPage = new NotFoundPage();
 let router = new Router();
 let menu = new Menu();
@@ -58,7 +66,15 @@ export let registrationManager = new RegistrationConfirmationManager(
     mainDiv
 );
 let authService = new AuthService(apiService, tokenRepositoryInstance);
-let settings = new Settings(savefileAccess, () => activeUsername, () => { /* TODO */ });
+let settings = new Settings(
+    savefileAccess,
+    () => activeUsername,
+    () => {
+        mergeLocalSavefileWithAccount.perform();
+        navigateTo("/");
+    },
+    () => { /* TODO */ }
+);
 
 let loginPage = new LoginComponent(
     async (username, password) => {
@@ -115,13 +131,11 @@ let playfield = /** @type {PlayfieldComponent | undefined} */ (undefined);
 let openNonogramId = /** @type {string | undefined} */ (undefined);
 
 export async function init() {
-    window.addEventListener("load", () => {
-        catalogAccess.invalidateCache();
-        savefileMigrator.performStorageMigration();
-    });
-
+    catalogAccess.invalidateCache();
+    
     activeUsername = await authService.getCurrentUsername();
     await savefileManager.initializeLocalSavefile();
+    savefileMigrator.performStorageMigration();
 
     await menu.init(contentRoot);
     await header.init(headerDiv);
