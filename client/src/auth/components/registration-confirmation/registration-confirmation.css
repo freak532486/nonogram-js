@@ -1,0 +1,18 @@
+#registration-confirmation .box {
+    margin: 10px;
+}
+
+#registration-confirmation .box-header {
+    background: linear-gradient(#ffffff00 -100%, #00f7ff30 100%);
+}
+
+#registration-confirmation .box-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#registration-confirmation .message {
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}

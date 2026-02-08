@@ -19,14 +19,16 @@ Play for free on <https://nonojs.com>!
 * Play _against_ other people 😈
 * Nonogram creator and sharing of nonograms with other people ➕
 
-## Installing locally
+## Running locally
 NPM must be installed.
 
 1. Open a terminal inside an empty folder.
-2. `git clone https://github.com/freak532486/NonoJs.git .`
-3. `npm install`
-4. `npm run build`
-5. `npx serve -s dist`
+1. `git clone` this repository into a folder, open a terminal inside the folder.
+1. Run `npm install && npm run build`
+1. Go into `server/`-folder, copy-paste the example settings, rename to `nonojs-server-settings.json`
+1. Adjust settings to your liking.
+  * Note: You _need_ a mailjet API key for sending E-Mails.
+1. Run `npm run start`
 
 
-NonoJs should now be reachable on `localhost:3000`. 
+NonoJs should now be reachable on `localhost:3000` (or whatever your configured port is). 

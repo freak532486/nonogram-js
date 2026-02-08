@@ -1,0 +1,17 @@
+/*
+ * This is an example configuration file for nonojs. The configuration file _must_ be called
+ * 'nonojs-server-settings.json' and must lie in the working director of the server (generally, next to the
+ * package.json).
+ *
+ * JSON does not support comments, so you must remove all comments from this file when copy-pasting.
+ */
+{
+    "port": 3000, /* Optional (Default 3000); Port at which the server listens to */
+    "certificate_keyfile": "./cert.key", /* Optional; Path to certificate keyfile for HTTPS */
+    "certificate_certfile": "./cert.cert", /* Optional; Path to certificate file for HTTPS */
+    "database_path": "/home/user/database.sqlite", /* Required: Path to SQLite database file (will be created if not exists) */
+    "mailjet_apikey_private": "...", /* Requred: Mailjet private API key for sending mails. */
+    "mailjet_apikey_public": "...", /* Required: Mailjet public API key for sending mails. */
+    "mailjet_mail_address": "noreply@nonojs.com", /* Required: Address from which mails should be sent */
+    "hostname": "https://nonojs.com" /* Required: Address under which this server is reachable. Is used for generating links. */
+}

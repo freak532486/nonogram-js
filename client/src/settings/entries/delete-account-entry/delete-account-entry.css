@@ -1,0 +1,16 @@
+#btn-delete-account {
+    background-color: red;
+    color: white;
+    border: 1px solid black;
+    padding: 10px;
+    font-weight: bold;
+}
+
+#btn-delete-account:active {
+    background-color: #630a0a;
+}
+
+#btn-delete-account:disabled {
+    background-color: gray;
+    color: lightgray;
+}

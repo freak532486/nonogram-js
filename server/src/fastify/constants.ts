@@ -1,0 +1,1 @@
+export const CONFIG_PATH = "nonojs-server-settings.json";
